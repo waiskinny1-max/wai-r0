@@ -1,4 +1,4 @@
-.PHONY: test zero prior memory symbolic symbolic-holdout tiny ablate suite leakage holdout smoke
+.PHONY: test zero prior memory symbolic symbolic-holdout tiny train-csv inspect-csv ablate suite leakage holdout smoke
 
 test:
 	pytest
@@ -21,6 +21,12 @@ symbolic-holdout:
 tiny:
 	PYTHONPATH=src python -m wai_r0 tiny-train --task copy --model configs/model/nano.yaml --examples 32 --train-len 8 --eval-lens 8,16,32
 
+inspect-csv:
+	PYTHONPATH=src python -m wai_r0 inspect-csv --csv training/basic_language_sample.csv --text-column text --sample-rows 10
+
+train-csv:
+	PYTHONPATH=src python -m wai_r0 train-csv --csv training/basic_language_sample.csv --text-column text --steps 2 --batch-size 2 --seq-len 32 --max-rows 8 --output reports/csv_language_probe
+
 ablate:
 	PYTHONPATH=src python -m wai_r0 ablate --matrix configs/benchmark/ablation.yaml --seeds 1337,2026 --tiny-examples 8
 
@@ -33,4 +39,4 @@ leakage:
 holdout:
 	PYTHONPATH=src python -m wai_r0 generate-holdout --output-dir examples/generated_holdouts --count 8 --seed 2026
 
-smoke: test zero prior memory symbolic tiny ablate
+smoke: test zero prior memory symbolic tiny inspect-csv train-csv ablate
