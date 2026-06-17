@@ -1,0 +1,58 @@
+{
+  "id": "synthetic_2026_0003_mirror_x",
+  "meta": {
+    "palette_size": 6,
+    "seed": 2026,
+    "size": 2,
+    "task_id": "synthetic_2026_0003_mirror_x",
+    "transform": "mirror_x"
+  },
+  "test": [
+    {
+      "input": [
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          1
+        ]
+      ],
+      "output": [
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          4
+        ]
+      ]
+    }
+  ],
+  "train": [
+    {
+      "input": [
+        [
+          4,
+          3
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "output": [
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          3
+        ]
+      ]
+    }
+  ]
+}

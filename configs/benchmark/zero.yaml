@@ -1,1 +1,4 @@
 name: zero
+seeds: [1337, 2026]
+seq_lens: [8, 16, 32]
+batch_size: 1

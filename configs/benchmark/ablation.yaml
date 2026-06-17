@@ -1,8 +1,13 @@
+seeds: [1337, 2026]
+symbolic_budget_s: 3.0
+symbolic_max_depth: 2
 variants:
-  - {name: A0, attention: mha, moe: false, recurrent: false}
-  - {name: A1, attention: gqa, moe: false, recurrent: false}
-  - {name: A2, attention: mla_lite, moe: false, recurrent: false}
-  - {name: A3, attention: mha, moe: true, recurrent: false}
-  - {name: A4, attention: mha, moe: false, recurrent: true}
-  - {name: A5, attention: mla_lite, moe: false, recurrent: true}
-  - {name: A6, attention: mla_lite, moe: true, recurrent: true}
+  - {name: A0, attention: mha, moe: false, recurrent: false, symbolic_shell: false}
+  - {name: A1, attention: gqa, moe: false, recurrent: false, symbolic_shell: false}
+  - {name: A2, attention: mla_lite, moe: false, recurrent: false, symbolic_shell: false}
+  - {name: A3, attention: mha, moe: true, recurrent: false, symbolic_shell: false}
+  - {name: A4, attention: mha, moe: false, recurrent: true, symbolic_shell: false}
+  - {name: A5, attention: mla_lite, moe: false, recurrent: true, symbolic_shell: false}
+  - {name: A6, attention: mla_lite, moe: true, recurrent: true, symbolic_shell: false}
+  - {name: A7, attention: none, moe: false, recurrent: false, symbolic_shell: true}
+  - {name: A8, attention: mla_lite, moe: true, recurrent: true, symbolic_shell: true}

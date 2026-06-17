@@ -1,1 +1,6 @@
 name: symbolic_arc
+tasks: examples/tasks
+generated_holdouts: examples/generated_holdouts
+budget_s: 3.0
+max_depth: 2
+leakage_manifest: reports/leakage_manifest.json

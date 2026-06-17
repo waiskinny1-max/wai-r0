@@ -1,0 +1,58 @@
+{
+  "id": "synthetic_2026_0000_rotate90",
+  "meta": {
+    "palette_size": 3,
+    "seed": 2026,
+    "size": 2,
+    "task_id": "synthetic_2026_0000_rotate90",
+    "transform": "rotate90"
+  },
+  "test": [
+    {
+      "input": [
+        [
+          2,
+          0
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "output": [
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          0
+        ]
+      ]
+    }
+  ],
+  "train": [
+    {
+      "input": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          2
+        ]
+      ],
+      "output": [
+        [
+          2,
+          0
+        ],
+        [
+          2,
+          1
+        ]
+      ]
+    }
+  ]
+}

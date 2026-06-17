@@ -1,1 +1,3 @@
-__version__="0.1.0"
+"""WAI-R0: zero-training reasoning architecture diagnostics."""
+
+__version__ = "0.2.0"

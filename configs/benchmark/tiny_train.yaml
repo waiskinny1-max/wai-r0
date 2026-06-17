@@ -1,1 +1,7 @@
 name: tiny_train
+seeds: [1337, 2026]
+task: copy
+examples: 32
+batch_size: 4
+train_len: 8
+eval_lens: [8, 16, 32]
