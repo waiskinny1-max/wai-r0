@@ -1,62 +1,54 @@
-# Training data directory
+# training/
 
-This directory is for local WAI-R0 training/probe inputs.
+Put local training data here. Large files are intentionally ignored by git.
 
-Use it for files such as a 500k-line CSV that teaches basic language patterns. Large datasets are ignored by `.gitignore`; do not commit them unless they are deliberately tiny examples.
+## Expected large CSV
 
-## Supported CSV shapes
-
-Single-column language rows:
+Use a CSV such as:
 
 ```csv
 text
-The cat is on the mat.
-A noun can name a person, place, or thing.
+A noun names a person, place, thing, or idea.
+A verb names an action or state.
 ```
 
-Prompt/completion rows:
+or:
 
 ```csv
 prompt,completion
-What is a noun?,A word that names a person, place, thing, or idea.
-Complete: The sky is,blue.
+What is a noun?,A noun names a person, place, thing, or idea.
 ```
 
-Column autodetection prefers:
-
-- text columns: `text`, `content`, `sentence`, `sample`;
-- prompt columns: `prompt`, `instruction`, `input`, `question`, `source`;
-- target columns: `completion`, `response`, `output`, `answer`, `target`.
-
-Pass `--text-column` and `--target-column` when the CSV uses other names.
-
-## Inspect first
+## v0.4 flow
 
 ```bash
-wai-r0 inspect-csv --csv training/basic_lang_500k.csv --text-column text --sample-rows 1000
+wai-r0 inspect-csv --csv training/basic_lang_500k.csv --text-column text
 ```
 
-## Train a small CSV language probe
+```bash
+wai-r0 audit-csv \
+  --csv training/basic_lang_500k.csv \
+  --text-column text \
+  --max-rows 500000 \
+  --output reports/csv_audit.json
+```
 
 ```bash
 wai-r0 train-csv \
   --csv training/basic_lang_500k.csv \
   --text-column text \
-  --config configs/model/nano.yaml \
-  --steps 200 \
-  --batch-size 8 \
-  --seq-len 64 \
+  --steps 500 \
+  --batch-size 16 \
+  --seq-len 128 \
   --max-rows 500000 \
-  --checkpoint checkpoints/csv_language_probe.pt \
-  --output reports/csv_language_probe
+  --eval-rows 256 \
+  --eval-interval 25 \
+  --baseline-rows 2048 \
+  --checkpoint reports/csv_probe.pt \
+  --log reports/csv_probe_train.jsonl \
+  --output reports/csv_language_readiness
 ```
 
-Or use the Markdown-plan route:
+## Ignored files
 
-```bash
-python main.py -train training/csv_language_probe.md
-```
-
-## Scientific boundary
-
-This is byte-level next-token training. A lower loss means the architecture learned some byte/text statistics under the chosen budget. It does not prove semantic understanding, reasoning, or AGI.
+`training/.gitignore` ignores real training corpora and checkpoints. Keep only small examples in git.

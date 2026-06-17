@@ -82,7 +82,7 @@ output: {tmp_path / 'csv_probe'}
     assert plan.csv_path == str(csv_path)
     report, loaded = run_markdown_training_plan(plan_path)
     assert loaded.mode == "csv_language"
-    assert report.result_type == "tiny-training CSV language probe"
+    assert report.result_type == "v0.4 CSV language-readiness experiment"
 
 
 def test_cli_train_csv_and_inspect_csv(tmp_path: Path) -> None:
@@ -150,3 +150,82 @@ def test_train_subcommand_accepts_csv(tmp_path) -> None:
     assert rc == 0
     assert (tmp_path / "csv_train.json").exists()
     assert (tmp_path / "csv_train.md").exists()
+
+
+
+def test_audit_language_csv_detects_splits_and_duplicates(tmp_path: Path) -> None:
+    from wai_r0.training.language_csv import CSVSplitSpec, audit_language_csv
+
+    csv_path = tmp_path / "dupes.csv"
+    csv_path.write_text(
+        "text\n"
+        "repeat me\n"
+        "repeat me\n"
+        "unique one\n"
+        "unique two\n"
+        "unique three\n",
+        encoding="utf-8",
+    )
+    audit = audit_language_csv(csv_path, split_spec=CSVSplitSpec(train=0.8, val=0.1, test=0.1, seed=42))
+    assert audit.nonempty_rows == 5
+    assert audit.duplicate_rows == 1
+    assert sum(audit.split_counts.values()) == 5
+    assert audit.mean_chars > 0
+
+
+def test_csv_language_probe_writes_log_and_best_checkpoint(tmp_path: Path) -> None:
+    from wai_r0.training.language_csv import run_csv_language_probe
+
+    csv_path = tmp_path / "basic.csv"
+    write_csv(csv_path)
+    ckpt = tmp_path / "probe.pt"
+    log = tmp_path / "train.jsonl"
+    cfg = ReasonerConfig(max_seq_len=32, seed=1234)
+    result = run_csv_language_probe(
+        cfg,
+        csv_path,
+        steps=2,
+        batch_size=2,
+        seq_len=24,
+        max_rows=4,
+        eval_rows=2,
+        checkpoint_path=ckpt,
+        log_path=log,
+        eval_interval=1,
+        train_fraction=0.75,
+        val_fraction=0.25,
+        test_fraction=0.0,
+    )
+    assert ckpt.exists()
+    assert log.exists()
+    assert result.best_eval_loss is not None
+    assert result.audit["split_counts"]["train"] > 0
+    assert len(result.history) == 2
+    assert result.uniform_baseline_loss is not None
+    assert result.unigram_baseline is not None
+
+
+def test_cli_audit_csv_and_sample_checkpoint(tmp_path: Path) -> None:
+    from wai_r0.cli import main
+
+    csv_path = tmp_path / "basic.csv"
+    write_csv(csv_path)
+    audit_out = tmp_path / "audit.json"
+    ckpt = tmp_path / "probe.pt"
+    assert main(["audit-csv", "--csv", str(csv_path), "--output", str(audit_out), "--max-rows", "4"]) == 0
+    assert audit_out.exists()
+    assert main([
+        "train-csv",
+        "--csv", str(csv_path),
+        "--steps", "1",
+        "--batch-size", "2",
+        "--seq-len", "24",
+        "--max-rows", "4",
+        "--eval-rows", "2",
+        "--checkpoint", str(ckpt),
+        "--train-fraction", "0.75",
+        "--val-fraction", "0.25",
+        "--test-fraction", "0.0",
+    ]) == 0
+    assert ckpt.exists()
+    assert main(["sample-csv", "--checkpoint", str(ckpt), "--prompt", "A", "--max-new-tokens", "2"]) == 0

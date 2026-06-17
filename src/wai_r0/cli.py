@@ -9,21 +9,20 @@ from wai_r0.benchmarks import ablate, architecture_priors, memory, symbolic, tin
 from wai_r0.config import ReasonerConfig
 from wai_r0.eval.holdout import write_holdout_tasks
 from wai_r0.eval.leakage_guard import LeakageGuard
-from wai_r0.report import BenchmarkReport, markdown_from_json
 from wai_r0.eval.suite import run_suite
-from wai_r0.training.language_csv import csv_language_probe_report, inspect_language_csv
+from wai_r0.report import BenchmarkReport, markdown_from_json
+from wai_r0.training.language_csv import (
+    CSVSplitSpec,
+    audit_language_csv,
+    csv_language_probe_report,
+    generate_from_csv_checkpoint,
+    inspect_language_csv,
+)
 from wai_r0.training.markdown_plan import run_markdown_training_plan
 
 
-
 def normalize_legacy_train_args(argv: list[str] | None) -> list[str] | None:
-    """Support `python main.py -train training.md` and CSV shorthand.
-
-    The project CLI is subcommand-based. The legacy `-train` spelling is kept
-    as a convenience alias because early WAI-R0 examples used it directly. A
-    `.csv` path is normalized to `train-csv --csv ...`; everything else is
-    treated as a Markdown training plan and normalized to `train ...`.
-    """
+    """Support `python main.py -train training.md` and CSV shorthand."""
 
     if argv is None:
         argv = sys.argv[1:]
@@ -36,6 +35,7 @@ def normalize_legacy_train_args(argv: list[str] | None) -> list[str] | None:
             return ["train-csv", "--csv", training_path, *args[2:]]
         return ["train", training_path, *args[2:]]
     return args
+
 
 def seqs(value: str) -> list[int]:
     return [int(part) for part in value.split(",") if part]
@@ -69,11 +69,6 @@ def _cmd_zero(args: argparse.Namespace) -> BenchmarkReport:
     return zero_neural(cfg(args.config), args.batch_size, args.seq_len)
 
 
-def _cmd_memory(args: argparse.Namespace) -> BenchmarkReport:
-    return memory(cfg(args.config), args.baseline, args.candidate, args.seq_lens, args.batch_size)
-
-
-
 def _cmd_prior(args: argparse.Namespace) -> BenchmarkReport:
     return architecture_priors(
         cfg(args.config),
@@ -83,11 +78,9 @@ def _cmd_prior(args: argparse.Namespace) -> BenchmarkReport:
     )
 
 
-def _cmd_suite(args: argparse.Namespace) -> None:
-    result = run_suite(cfg(args.config), args.suite)
-    for json_path, md_path in result.written:
-        print(json_path)
-        print(md_path)
+def _cmd_memory(args: argparse.Namespace) -> BenchmarkReport:
+    return memory(cfg(args.config), args.baseline, args.candidate, args.seq_lens, args.batch_size)
+
 
 def _cmd_symbolic(args: argparse.Namespace) -> BenchmarkReport:
     return symbolic(
@@ -114,22 +107,11 @@ def _cmd_tiny(args: argparse.Namespace) -> BenchmarkReport:
 def _cmd_train(args: argparse.Namespace) -> tuple[BenchmarkReport, str | None]:
     path = Path(args.plan)
     if path.suffix.lower() == ".csv":
-        report = csv_language_probe_report(
-            cfg(args.config),
-            csv_path=path,
-            text_column=args.text_column,
-            target_column=args.target_column,
-            steps=args.steps,
-            batch_size=args.batch_size,
-            seq_len=args.seq_len,
-            max_rows=args.max_rows,
-            lr=args.lr,
-            eval_rows=args.eval_rows,
-            checkpoint_path=args.checkpoint,
-        )
+        report = _csv_report_from_args(args, csv_path=path)
         return report, args.output
     report, plan = run_markdown_training_plan(args.plan)
     return report, args.output or plan.output
+
 
 def _cmd_inspect_csv(args: argparse.Namespace) -> None:
     inspection = inspect_language_csv(
@@ -138,19 +120,35 @@ def _cmd_inspect_csv(args: argparse.Namespace) -> None:
         target_column=args.target_column,
         sample_rows=args.sample_rows,
     )
-    payload = json.dumps(inspection.to_dict(), indent=2, sort_keys=True)
-    if args.output:
-        Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.output).write_text(payload + "\n", encoding="utf-8")
-        print(args.output)
+    _write_json_payload(inspection.to_dict(), args.output)
+
+
+def _cmd_audit_csv(args: argparse.Namespace) -> None:
+    audit = audit_language_csv(
+        args.csv,
+        text_column=args.text_column,
+        target_column=args.target_column,
+        max_rows=args.max_rows,
+        split_spec=CSVSplitSpec(args.train_fraction, args.val_fraction, args.test_fraction, args.split_seed),
+    )
+    _write_json_payload(audit.to_dict(), args.output)
+
+
+def _write_json_payload(payload: dict, output: str | None) -> None:
+    text = json.dumps(payload, indent=2, sort_keys=True)
+    if output:
+        path = Path(output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text + "\n", encoding="utf-8")
+        print(path)
     else:
-        print(payload)
+        print(text)
 
 
-def _cmd_train_csv(args: argparse.Namespace) -> BenchmarkReport:
+def _csv_report_from_args(args: argparse.Namespace, csv_path: str | Path | None = None) -> BenchmarkReport:
     return csv_language_probe_report(
         cfg(args.config),
-        csv_path=args.csv,
+        csv_path=csv_path or args.csv,
         text_column=args.text_column,
         target_column=args.target_column,
         steps=args.steps,
@@ -160,7 +158,19 @@ def _cmd_train_csv(args: argparse.Namespace) -> BenchmarkReport:
         lr=args.lr,
         eval_rows=args.eval_rows,
         checkpoint_path=args.checkpoint,
+        log_path=args.log,
+        resume_from=args.resume_from,
+        eval_interval=args.eval_interval,
+        train_fraction=args.train_fraction,
+        val_fraction=args.val_fraction,
+        test_fraction=args.test_fraction,
+        split_seed=args.split_seed,
+        baseline_rows=args.baseline_rows,
     )
+
+
+def _cmd_train_csv(args: argparse.Namespace) -> BenchmarkReport:
+    return _csv_report_from_args(args)
 
 
 def _cmd_ablate(args: argparse.Namespace) -> BenchmarkReport:
@@ -171,6 +181,48 @@ def _cmd_ablate(args: argparse.Namespace) -> BenchmarkReport:
         tasks=args.tasks,
         tiny_examples=args.tiny_examples,
     )
+
+
+def _cmd_suite(args: argparse.Namespace) -> None:
+    result = run_suite(cfg(args.config), args.suite)
+    for json_path, md_path in result.written:
+        print(json_path)
+        print(md_path)
+
+
+def _cmd_sample_csv(args: argparse.Namespace) -> None:
+    text = generate_from_csv_checkpoint(args.checkpoint, prompt=args.prompt, max_new_tokens=args.max_new_tokens)
+    if args.output:
+        path = Path(args.output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        print(path)
+    else:
+        print(text)
+
+
+def add_csv_training_args(parser: argparse.ArgumentParser, *, include_csv_path: bool) -> None:
+    if include_csv_path:
+        parser.add_argument("--csv", required=True, help="CSV path, for example training/basic_lang.csv")
+    parser.add_argument("--config", "--model", dest="config", default="configs/model/nano.yaml")
+    parser.add_argument("--text-column")
+    parser.add_argument("--target-column")
+    parser.add_argument("--steps", type=int, default=25)
+    parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--seq-len", type=int, default=64)
+    parser.add_argument("--max-rows", type=int)
+    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--eval-rows", type=int, default=8)
+    parser.add_argument("--eval-interval", type=int, default=5)
+    parser.add_argument("--baseline-rows", type=int, default=256)
+    parser.add_argument("--train-fraction", type=float, default=0.90)
+    parser.add_argument("--val-fraction", type=float, default=0.05)
+    parser.add_argument("--test-fraction", type=float, default=0.05)
+    parser.add_argument("--split-seed", type=int, default=1337)
+    parser.add_argument("--checkpoint")
+    parser.add_argument("--resume-from")
+    parser.add_argument("--log")
+    parser.add_argument("--output")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -219,38 +271,34 @@ def main(argv: list[str] | None = None) -> int:
 
     train = sub.add_parser("train", help="run training from Markdown or CSV")
     train.add_argument("plan", help="Markdown training plan or CSV language data file")
-    train.add_argument("--output", help="override the output stem/path declared in the Markdown plan")
-    train.add_argument("--config", "--model", dest="config", default="configs/model/nano.yaml")
-    train.add_argument("--text-column")
-    train.add_argument("--target-column")
-    train.add_argument("--steps", type=int, default=25)
-    train.add_argument("--batch-size", type=int, default=4)
-    train.add_argument("--seq-len", type=int, default=64)
-    train.add_argument("--max-rows", type=int)
-    train.add_argument("--lr", type=float, default=3e-4)
-    train.add_argument("--eval-rows", type=int, default=8)
-    train.add_argument("--checkpoint")
+    add_csv_training_args(train, include_csv_path=False)
 
-    inspect_csv = sub.add_parser("inspect-csv", help="inspect a CSV file before language-probe training")
+    inspect_csv = sub.add_parser("inspect-csv", help="quickly inspect a CSV file before language-probe training")
     inspect_csv.add_argument("--csv", required=True, help="CSV path, for example training/basic_lang.csv")
     inspect_csv.add_argument("--text-column")
     inspect_csv.add_argument("--target-column")
     inspect_csv.add_argument("--sample-rows", type=int, default=1000)
     inspect_csv.add_argument("--output")
 
-    train_csv = sub.add_parser("train-csv", help="run a byte-level CSV language probe")
-    train_csv.add_argument("--csv", required=True, help="CSV path, for example training/basic_lang.csv")
-    train_csv.add_argument("--config", "--model", dest="config", default="configs/model/nano.yaml")
-    train_csv.add_argument("--text-column")
-    train_csv.add_argument("--target-column")
-    train_csv.add_argument("--steps", type=int, default=25)
-    train_csv.add_argument("--batch-size", type=int, default=4)
-    train_csv.add_argument("--seq-len", type=int, default=64)
-    train_csv.add_argument("--max-rows", type=int)
-    train_csv.add_argument("--lr", type=float, default=3e-4)
-    train_csv.add_argument("--eval-rows", type=int, default=8)
-    train_csv.add_argument("--checkpoint")
-    train_csv.add_argument("--output")
+    audit_csv = sub.add_parser("audit-csv", help="stream a CSV audit with split counts and duplicate rate")
+    audit_csv.add_argument("--csv", required=True, help="CSV path, for example training/basic_lang.csv")
+    audit_csv.add_argument("--text-column")
+    audit_csv.add_argument("--target-column")
+    audit_csv.add_argument("--max-rows", type=int)
+    audit_csv.add_argument("--train-fraction", type=float, default=0.90)
+    audit_csv.add_argument("--val-fraction", type=float, default=0.05)
+    audit_csv.add_argument("--test-fraction", type=float, default=0.05)
+    audit_csv.add_argument("--split-seed", type=int, default=1337)
+    audit_csv.add_argument("--output")
+
+    train_csv = sub.add_parser("train-csv", help="run a held-out byte-level CSV language-readiness experiment")
+    add_csv_training_args(train_csv, include_csv_path=True)
+
+    sample_csv = sub.add_parser("sample-csv", help="greedy byte-level sample from a CSV checkpoint")
+    sample_csv.add_argument("--checkpoint", required=True)
+    sample_csv.add_argument("--prompt", default="")
+    sample_csv.add_argument("--max-new-tokens", type=int, default=64)
+    sample_csv.add_argument("--output")
 
     abl = sub.add_parser("ablate")
     abl.add_argument("--config", default="configs/model/nano.yaml")
@@ -297,8 +345,12 @@ def main(argv: list[str] | None = None) -> int:
         emit(report, output, "train_md")
     elif args.cmd == "inspect-csv":
         _cmd_inspect_csv(args)
+    elif args.cmd == "audit-csv":
+        _cmd_audit_csv(args)
     elif args.cmd == "train-csv":
-        emit(_cmd_train_csv(args), args.output, "csv_language_probe")
+        emit(_cmd_train_csv(args), args.output, "csv_language_readiness")
+    elif args.cmd == "sample-csv":
+        _cmd_sample_csv(args)
     elif args.cmd == "ablate":
         emit(_cmd_ablate(args), args.output, "ablation")
     elif args.cmd == "generate-holdout":

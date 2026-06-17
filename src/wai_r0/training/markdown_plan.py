@@ -34,8 +34,17 @@ _ALLOWED_KEYS = {
     "max_rows",
     "lr",
     "eval_rows",
+    "eval_interval",
+    "baseline_rows",
+    "train_fraction",
+    "val_fraction",
+    "test_fraction",
+    "split_seed",
     "checkpoint",
     "checkpoint_path",
+    "resume_from",
+    "log",
+    "log_path",
 }
 
 
@@ -69,7 +78,15 @@ class MarkdownTrainingPlan:
     max_rows: int | None = None
     lr: float = 3e-4
     eval_rows: int = 8
+    eval_interval: int = 5
+    baseline_rows: int = 256
+    train_fraction: float = 0.90
+    val_fraction: float = 0.05
+    test_fraction: float = 0.05
+    split_seed: int | None = None
     checkpoint_path: str | None = None
+    resume_from: str | None = None
+    log_path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -230,7 +247,15 @@ def load_markdown_training_plan(path: str | Path) -> MarkdownTrainingPlan:
             max_rows=_as_optional_positive_int(normalized.get("max_rows"), "max_rows"),
             lr=_as_positive_float(normalized.get("lr", 3e-4), "lr"),
             eval_rows=_as_positive_int(normalized.get("eval_rows", 8), "eval_rows"),
+            eval_interval=_as_positive_int(normalized.get("eval_interval", 5), "eval_interval"),
+            baseline_rows=_as_positive_int(normalized.get("baseline_rows", 256), "baseline_rows"),
+            train_fraction=_as_positive_float(normalized.get("train_fraction", 0.90), "train_fraction"),
+            val_fraction=_as_positive_float(normalized.get("val_fraction", 0.05), "val_fraction"),
+            test_fraction=_as_positive_float(normalized.get("test_fraction", 0.05), "test_fraction"),
+            split_seed=_as_optional_positive_int(normalized.get("split_seed"), "split_seed"),
             checkpoint_path=_optional_str(normalized.get("checkpoint_path") or normalized.get("checkpoint")),
+            resume_from=_optional_str(normalized.get("resume_from")),
+            log_path=_optional_str(normalized.get("log_path") or normalized.get("log")),
         )
 
     task = str(normalized.get("task", "copy")).strip()
@@ -267,6 +292,14 @@ def run_markdown_training_plan(path: str | Path) -> tuple[BenchmarkReport, Markd
             lr=plan.lr,
             eval_rows=plan.eval_rows,
             checkpoint_path=plan.checkpoint_path,
+            log_path=plan.log_path,
+            resume_from=plan.resume_from,
+            eval_interval=plan.eval_interval,
+            train_fraction=plan.train_fraction,
+            val_fraction=plan.val_fraction,
+            test_fraction=plan.test_fraction,
+            split_seed=plan.split_seed,
+            baseline_rows=plan.baseline_rows,
         )
         report.name = "train_md_csv"
         report.benchmark_config = {
