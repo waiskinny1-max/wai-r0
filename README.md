@@ -4,7 +4,7 @@ WAI-R0 is a zero-training reasoning architecture lab.
 
 It does **not** claim random neural networks can reason. It tests whether a reasoning-oriented architecture has measurable structure worth training: stable signal propagation, memory behavior, recurrent latent refinement, MoE routing health, symbolic search compatibility, verifier integration, and tiny-training sample efficiency.
 
-Status: `v0.2 research prototype`.
+Status: `v0.2.1 research prototype`.
 
 ## What is implemented
 
@@ -37,6 +37,8 @@ wai-r0 symbolic-arc --tasks examples/tasks --budget 3s --leakage-manifest report
 wai-r0 generate-holdout --output-dir examples/generated_holdouts --count 8 --seed 2026
 wai-r0 leakage-check --tasks examples/generated_holdouts --split generated_holdout --manifest reports/leakage_manifest.json --register
 wai-r0 tiny-train --task copy --model configs/model/nano.yaml --examples 32 --train-len 8 --eval-lens 8,16,32
+wai-r0 train examples/training.md
+python main.py -train examples/training.md
 wai-r0 ablate --matrix configs/benchmark/ablation.yaml --seeds 1337,2026 --tiny-examples 8
 wai-r0 report --input reports/latest.json --format md
 ```
@@ -52,6 +54,24 @@ Use larger tiny-training budgets only after the smoke path works on your hardwar
 | `zero-training symbolic solver result` | Explicit symbolic program search. Not neural reasoning. |
 | `tiny-training architecture probe` | Small supervised algorithmic learning probe. |
 | `mixed architecture diagnostic` | Ablation report combining diagnostics; still not proof of reasoning. |
+
+
+## v0.2.1 mini patch
+
+`wai-r0 train <plan.md>` and `python main.py -train <plan.md>` load a Markdown training plan and run the existing tiny-training architecture probe. The Markdown file is declarative only: unsupported keys are rejected, and arbitrary Markdown/shell/Python instructions are not executed.
+
+Supported plan fields:
+
+```yaml
+mode: tiny_probe
+config: configs/model/nano.yaml
+task: copy
+examples: 16
+batch_size: 4
+train_len: 8
+eval_lens: [8, 16]
+output: reports/train_md
+```
 
 ## v0.2 additions
 
@@ -87,6 +107,7 @@ src/wai_r0/
     scorecard.py         keep/kill/re-test score helpers
   training/
     probes.py            tiny supervised algorithmic probes
+    markdown_plan.py     declarative Markdown training-plan parser
 ```
 
 ## Current recommendation

@@ -1,15 +1,34 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
+import sys
 
 from wai_r0.benchmarks import ablate, memory, symbolic, tiny_train, zero_neural
 from wai_r0.config import ReasonerConfig
 from wai_r0.eval.holdout import write_holdout_tasks
 from wai_r0.eval.leakage_guard import LeakageGuard
 from wai_r0.report import BenchmarkReport, markdown_from_json
+from wai_r0.training.markdown_plan import run_markdown_training_plan
 
+
+
+def normalize_legacy_train_args(argv: list[str] | None) -> list[str] | None:
+    """Support `python main.py -train training.md` without weakening the normal CLI.
+
+    The project CLI is subcommand-based (`wai-r0 tiny-train ...`). The legacy
+    `-train` spelling is accepted as a convenience alias and is normalized to
+    the explicit `train` subcommand before argparse runs.
+    """
+
+    if argv is None:
+        argv = sys.argv[1:]
+    args = list(argv)
+    if args and args[0] in {"-train", "--train"}:
+        if len(args) < 2:
+            raise SystemExit("-train requires a Markdown training plan path, e.g. python main.py -train training.md")
+        return ["train", args[1], *args[2:]]
+    return args
 
 def seqs(value: str) -> list[int]:
     return [int(part) for part in value.split(",") if part]
@@ -69,6 +88,11 @@ def _cmd_tiny(args: argparse.Namespace) -> BenchmarkReport:
     )
 
 
+def _cmd_train(args: argparse.Namespace) -> tuple[BenchmarkReport, str | None]:
+    report, plan = run_markdown_training_plan(args.plan)
+    return report, args.output or plan.output
+
+
 def _cmd_ablate(args: argparse.Namespace) -> BenchmarkReport:
     return ablate(
         cfg(args.config),
@@ -80,6 +104,7 @@ def _cmd_ablate(args: argparse.Namespace) -> BenchmarkReport:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = normalize_legacy_train_args(argv)
     parser = argparse.ArgumentParser(prog="wai-r0")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -115,6 +140,10 @@ def main(argv: list[str] | None = None) -> int:
     tiny.add_argument("--eval-lens", type=seqs, default=[8, 16])
     tiny.add_argument("--output")
 
+    train = sub.add_parser("train", help="run a tiny-training probe from a Markdown plan")
+    train.add_argument("plan", help="Markdown file with YAML frontmatter, YAML block, or key-value training fields")
+    train.add_argument("--output", help="override the output stem/path declared in the Markdown plan")
+
     abl = sub.add_parser("ablate")
     abl.add_argument("--config", default="configs/model/nano.yaml")
     abl.add_argument("--matrix", required=True)
@@ -149,6 +178,9 @@ def main(argv: list[str] | None = None) -> int:
         emit(_cmd_symbolic(args), args.output, "symbolic_arc")
     elif args.cmd == "tiny-train":
         emit(_cmd_tiny(args), args.output, "tiny_train")
+    elif args.cmd == "train":
+        report, output = _cmd_train(args)
+        emit(report, output, "train_md")
     elif args.cmd == "ablate":
         emit(_cmd_ablate(args), args.output, "ablation")
     elif args.cmd == "generate-holdout":
@@ -157,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "leakage-check":
         guard = LeakageGuard(args.manifest)
         findings = guard.scan_directory(args.tasks, args.split, args.register)
-        print(json.dumps(guard.summary(findings), indent=2, sort_keys=True))
+        print(guard.summary(findings))
     elif args.cmd == "report":
         md = markdown_from_json(args.input)
         if args.output:
