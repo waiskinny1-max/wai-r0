@@ -4,11 +4,12 @@ import argparse
 from pathlib import Path
 import sys
 
-from wai_r0.benchmarks import ablate, memory, symbolic, tiny_train, zero_neural
+from wai_r0.benchmarks import ablate, architecture_priors, memory, symbolic, tiny_train, zero_neural
 from wai_r0.config import ReasonerConfig
 from wai_r0.eval.holdout import write_holdout_tasks
 from wai_r0.eval.leakage_guard import LeakageGuard
 from wai_r0.report import BenchmarkReport, markdown_from_json
+from wai_r0.eval.suite import run_suite
 from wai_r0.training.markdown_plan import run_markdown_training_plan
 
 
@@ -66,6 +67,23 @@ def _cmd_memory(args: argparse.Namespace) -> BenchmarkReport:
     return memory(cfg(args.config), args.baseline, args.candidate, args.seq_lens, args.batch_size)
 
 
+
+
+def _cmd_prior(args: argparse.Namespace) -> BenchmarkReport:
+    return architecture_priors(
+        cfg(args.config),
+        batch_size=args.batch_size,
+        seq_len=args.seq_len,
+        recurrent_depths=tuple(args.recurrent_depths),
+    )
+
+
+def _cmd_suite(args: argparse.Namespace) -> None:
+    result = run_suite(cfg(args.config), args.suite)
+    for json_path, md_path in result.written:
+        print(json_path)
+        print(md_path)
+
 def _cmd_symbolic(args: argparse.Namespace) -> BenchmarkReport:
     return symbolic(
         args.tasks,
@@ -113,6 +131,13 @@ def main(argv: list[str] | None = None) -> int:
     zero.add_argument("--batch-size", type=int, default=1)
     zero.add_argument("--seq-len", type=int, default=16)
     zero.add_argument("--output")
+
+    prior = sub.add_parser("architecture-priors")
+    prior.add_argument("--config", default="configs/model/nano.yaml")
+    prior.add_argument("--batch-size", type=int, default=2)
+    prior.add_argument("--seq-len", type=int, default=16)
+    prior.add_argument("--recurrent-depths", type=seqs, default=[1, 2, 4])
+    prior.add_argument("--output")
 
     mem = sub.add_parser("memory")
     mem.add_argument("--config", default="configs/model/nano.yaml")
@@ -163,6 +188,10 @@ def main(argv: list[str] | None = None) -> int:
     leak.add_argument("--manifest", default="reports/leakage_manifest.json")
     leak.add_argument("--register", action="store_true")
 
+    suite = sub.add_parser("suite")
+    suite.add_argument("--config", default="configs/model/nano.yaml")
+    suite.add_argument("--suite", default="configs/benchmark/suite.yaml")
+
     rep = sub.add_parser("report")
     rep.add_argument("--input", required=True)
     rep.add_argument("--format", choices=["md"], default="md")
@@ -172,6 +201,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "zero-neural":
         emit(_cmd_zero(args), args.output, "zero_neural")
+    elif args.cmd == "architecture-priors":
+        emit(_cmd_prior(args), args.output, "architecture_priors")
     elif args.cmd == "memory":
         emit(_cmd_memory(args), args.output, "memory")
     elif args.cmd == "symbolic-arc":
@@ -190,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
         guard = LeakageGuard(args.manifest)
         findings = guard.scan_directory(args.tasks, args.split, args.register)
         print(guard.summary(findings))
+    elif args.cmd == "suite":
+        _cmd_suite(args)
     elif args.cmd == "report":
         md = markdown_from_json(args.input)
         if args.output:

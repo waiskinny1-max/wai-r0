@@ -8,6 +8,7 @@ import yaml
 
 from wai_r0.config import ReasonerConfig
 from wai_r0.eval.leakage_guard import LeakageGuard
+from wai_r0.eval.prior_diagnostics import run_prior_diagnostics
 from wai_r0.model import ReasonerCore, set_seed
 from wai_r0.report import BenchmarkReport, recommend
 from wai_r0.symbolic import ProgramSearch, load_task
@@ -55,6 +56,37 @@ def zero_neural(cfg: ReasonerConfig, batch_size: int = 1, seq_len: int = 16) -> 
             "Single local run; use multi-seed ablation before any scale decision.",
         ],
         recommendation=recommend(score if finite and fgrads else 0.0),
+    )
+
+
+def architecture_priors(
+    cfg: ReasonerConfig,
+    batch_size: int = 2,
+    seq_len: int = 16,
+    recurrent_depths: tuple[int, ...] = (1, 2, 4),
+) -> BenchmarkReport:
+    raw = run_prior_diagnostics(cfg, batch_size=batch_size, seq_len=seq_len, recurrent_depths=recurrent_depths)
+    score = float(raw["aggregate_prior_score"])
+    return BenchmarkReport(
+        "architecture_priors",
+        "architecture-prior diagnostic",
+        cfg.seed,
+        cfg.device,
+        cfg.dtype,
+        cfg.to_dict(),
+        {
+            "batch_size": batch_size,
+            "seq_len": seq_len,
+            "recurrent_depths": list(recurrent_depths),
+        },
+        raw,
+        "Tier-1 no-gradient architecture-prior diagnostics completed. This tests mechanics, not reasoning.",
+        [
+            "No gradient updates are performed.",
+            "Identity, position, recurrence, routing, and memory probes are proxies only.",
+            "A high prior score does not prove language understanding or frontier reasoning.",
+        ],
+        recommend(score),
     )
 
 

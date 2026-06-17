@@ -1,0 +1,22 @@
+output_dir: reports/suite_v03
+steps:
+  - name: zero
+    seq_len: 8
+    batch_size: 1
+  - name: prior
+    seq_len: 16
+    batch_size: 2
+    recurrent_depths: [1, 2, 4]
+  - name: memory
+    baseline: mha
+    candidate: mla_lite
+    seq_lens: [32, 64]
+  - name: symbolic
+    tasks: examples/tasks
+    budget_s: 3.0
+    max_depth: 2
+  - name: tiny
+    task: copy
+    examples: 8
+    train_len: 8
+    eval_lens: [8, 16]

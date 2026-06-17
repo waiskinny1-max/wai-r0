@@ -4,7 +4,7 @@ WAI-R0 is a zero-training reasoning architecture lab.
 
 It does **not** claim random neural networks can reason. It tests whether a reasoning-oriented architecture has measurable structure worth training: stable signal propagation, memory behavior, recurrent latent refinement, MoE routing health, symbolic search compatibility, verifier integration, and tiny-training sample efficiency.
 
-Status: `v0.2.1 research prototype`.
+Status: `v0.3 research prototype`.
 
 ## What is implemented
 
@@ -13,6 +13,7 @@ Status: `v0.2.1 research prototype`.
 - Recurrent latent iterative refinement state with norm/drift logging. It is not called "thought" in reports.
 - Tiny top-k MoE layer with router entropy, expert load, and collapse warning.
 - ARC-style symbolic DSL and verified program search. Symbolic success is reported as symbolic, not neural.
+- Tier-1 architecture-prior diagnostics for position, identity-signal, memory mechanics, recurrence, and MoE routing.
 - Local leakage guard that hashes task content and flags cross-split duplicates.
 - Deterministic generated ARC-style holdouts for local dev/validation separation.
 - Multi-seed ablation matrix including A7 symbolic-only and A8 hybrid variants.
@@ -32,6 +33,7 @@ pip install -e .[dev]
 
 ```bash
 wai-r0 zero-neural --config configs/model/nano.yaml
+wai-r0 architecture-priors --config configs/model/nano.yaml --seq-len 16 --recurrent-depths 1,2,4
 wai-r0 memory --baseline mha --candidate mla_lite --seq-lens 64,128,256
 wai-r0 symbolic-arc --tasks examples/tasks --budget 3s --leakage-manifest reports/leakage_manifest.json --split dev
 wai-r0 generate-holdout --output-dir examples/generated_holdouts --count 8 --seed 2026
@@ -40,6 +42,7 @@ wai-r0 tiny-train --task copy --model configs/model/nano.yaml --examples 32 --tr
 wai-r0 train examples/training.md
 python main.py -train examples/training.md
 wai-r0 ablate --matrix configs/benchmark/ablation.yaml --seeds 1337,2026 --tiny-examples 8
+wai-r0 suite --config configs/model/nano.yaml --suite configs/benchmark/suite.yaml
 wai-r0 report --input reports/latest.json --format md
 ```
 
@@ -50,11 +53,21 @@ Use larger tiny-training budgets only after the smoke path works on your hardwar
 | Label | Meaning |
 |---|---|
 | `zero-training neural diagnostic` | Random-weight numerical sanity. Not intelligence. |
-| `architecture-prior diagnostic` | No-gradient architecture mechanics. |
+| `architecture-prior diagnostic` | No-gradient architecture mechanics: activation stability, position proxy, identity signal, memory mechanics, recurrence, and routing. |
 | `zero-training symbolic solver result` | Explicit symbolic program search. Not neural reasoning. |
 | `tiny-training architecture probe` | Small supervised algorithmic learning probe. |
 | `mixed architecture diagnostic` | Ablation report combining diagnostics; still not proof of reasoning. |
 
+
+
+## v0.3 additions
+
+| Area | What changed | Why it matters |
+|---|---|---|
+| Tier-1 diagnostics | Adds `architecture-priors` command | Tests architecture mechanics before wasting tiny-training runs. |
+| Prior probes | Activation sanity, position proxy, identity signal, memory mechanics, recurrence, routing | Gives falsifiable no-gradient signals without claiming reasoning. |
+| Suite runner | Adds `suite` command and `configs/benchmark/suite.yaml` | Runs the standard smoke ladder from one config. |
+| Reporting | Prior suite exports JSON/Markdown through the existing report system | Keeps metadata, limitations, and recommendation discipline consistent. |
 
 ## v0.2.1 mini patch
 
@@ -98,11 +111,13 @@ src/wai_r0/
   config.py              model/benchmark dataclasses and YAML loading
   model.py               transformer, attention, MLA-lite, MoE, recurrence, core API
   symbolic.py            ARC-style grid DSL and program search
-  benchmarks.py          zero-neural, memory, symbolic, tiny-train, ablations
+  benchmarks.py          zero-neural, architecture-prior, memory, symbolic, tiny-train, ablations
   report.py              metadata, JSON/markdown reports, recommendations
   cli.py                 wai-r0 command surface
   eval/
     leakage_guard.py     content-hash task provenance checks
+    prior_diagnostics.py architecture-prior probes
+    suite.py             ordered diagnostic suite runner
     holdout.py           deterministic generated ARC-style tasks
     scorecard.py         keep/kill/re-test score helpers
   training/
@@ -112,4 +127,4 @@ src/wai_r0/
 
 ## Current recommendation
 
-v0.2 is good enough for local architecture iteration and honest diagnostic reports. It is **not** enough to justify serious pretraining. The next experiment should add broader algorithmic probes, more seeds, longer contexts, baseline-vs-candidate plots, and explicit keep/kill thresholds per component.
+v0.3 is good enough for local architecture iteration and honest diagnostic reports. It is **not** enough to justify serious pretraining. The next experiment should add broader algorithmic probes, longer-context profiler runs, baseline-vs-candidate plots, and stricter per-component keep/kill thresholds.

@@ -1,0 +1,4 @@
+name: architecture_priors
+batch_size: 2
+seq_len: 16
+recurrent_depths: [1, 2, 4]
