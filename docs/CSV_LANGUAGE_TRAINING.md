@@ -1,49 +1,155 @@
-# CSV language-probe training
+# CSV language-readiness training
 
-WAI-R0 v0.4 supports CSV-backed language probes for local experiments. This is intended for files such as a 500k-line basic-language CSV.
+WAI-R0 v0.4 supports CSV-backed language-readiness experiments for local architecture work. The intended use case is a large synthetic or curated CSV, for example a 500k-line basic-language file.
 
-## What it does
+This is not full language pretraining. It is a controlled tiny-training harness that answers one narrower question:
 
-- streams rows from a CSV file;
-- detects or accepts text/prompt/completion columns;
-- tokenizes text at UTF-8 byte level;
-- trains the existing `ReasonerCore` with a causal next-byte objective;
-- exports JSON/Markdown reports;
-- optionally writes a PyTorch checkpoint.
+> Can this WAI-R0 architecture reduce held-out byte-level next-token loss on the CSV, and can it beat trivial byte baselines?
 
-## What it does not do
+## Supported CSV shapes
 
-- no BPE/SentencePiece tokenizer;
-- no full language pretraining pipeline;
-- no dataset license audit;
-- no semantic reasoning benchmark;
-- no claim that lower loss equals understanding.
+Single-text CSV:
 
-## Recommended flow
-
-1. Put the large file under `/training/`, for example `training/basic_lang_500k.csv`.
-2. Inspect it:
-
-```bash
-wai-r0 inspect-csv --csv training/basic_lang_500k.csv --text-column text --sample-rows 1000
+```csv
+text
+A noun names a person, place, thing, or idea.
+A verb names an action or state.
 ```
 
-3. Run a small smoke train:
+Prompt/completion CSV:
 
-```bash
-wai-r0 train-csv --csv training/basic_lang_500k.csv --text-column text --steps 25 --batch-size 4 --seq-len 64 --max-rows 1000
+```csv
+prompt,completion
+What is a noun?,A noun names a person, place, thing, or idea.
+What is a verb?,A verb names an action or state.
 ```
 
-4. Increase budget only if loss moves and reports stay stable.
+Detected text columns:
 
-## CSV columns
+- `text`
+- `content`
+- `sentence`
+- `sample`
 
-The loader accepts either a direct text column or prompt/completion pairs.
+Detected prompt columns:
 
-Preferred names:
+- `prompt`
+- `instruction`
+- `input`
+- `question`
+- `source`
 
-- direct text: `text`, `content`, `sentence`, `sample`;
-- prompt: `prompt`, `instruction`, `input`, `question`, `source`;
-- target: `completion`, `response`, `output`, `answer`, `target`.
+Detected target columns:
 
-For prompt/completion CSVs, the training row becomes `prompt + "\n" + completion`.
+- `completion`
+- `response`
+- `output`
+- `answer`
+- `target`
+
+For prompt/completion rows, WAI-R0 trains on:
+
+```text
+prompt + "\n" + completion
+```
+
+## Step 1 — Inspect quickly
+
+```bash
+wai-r0 inspect-csv \
+  --csv training/basic_lang_500k.csv \
+  --text-column text \
+  --sample-rows 1000
+```
+
+This checks the header, detected columns, sample lengths, and obvious warnings.
+
+## Step 2 — Audit the corpus
+
+```bash
+wai-r0 audit-csv \
+  --csv training/basic_lang_500k.csv \
+  --text-column text \
+  --max-rows 500000 \
+  --train-fraction 0.90 \
+  --val-fraction 0.05 \
+  --test-fraction 0.05 \
+  --output reports/csv_audit.json
+```
+
+The audit streams rows and records:
+
+- row counts;
+- duplicate row count/rate;
+- character and UTF-8 byte totals;
+- deterministic split counts;
+- warnings for empty splits or duplicate-heavy data.
+
+## Step 3 — Run a real v0.4 probe
+
+```bash
+wai-r0 train-csv \
+  --csv training/basic_lang_500k.csv \
+  --text-column text \
+  --steps 500 \
+  --batch-size 16 \
+  --seq-len 128 \
+  --max-rows 500000 \
+  --eval-rows 256 \
+  --eval-interval 25 \
+  --baseline-rows 2048 \
+  --checkpoint reports/csv_probe.pt \
+  --log reports/csv_probe_train.jsonl \
+  --output reports/csv_language_readiness
+```
+
+Outputs:
+
+```text
+reports/csv_language_readiness.json
+reports/csv_language_readiness.md
+reports/csv_probe.pt
+reports/csv_probe.best.pt
+reports/csv_probe_train.jsonl
+```
+
+## Step 4 — Resume if needed
+
+```bash
+wai-r0 train-csv \
+  --csv training/basic_lang_500k.csv \
+  --text-column text \
+  --resume-from reports/csv_probe.pt \
+  --steps 500 \
+  --checkpoint reports/csv_probe_resume.pt \
+  --log reports/csv_probe_resume.jsonl
+```
+
+## Step 5 — Inspect checkpoint output
+
+```bash
+wai-r0 sample-csv \
+  --checkpoint reports/csv_probe.pt \
+  --prompt "A noun is" \
+  --max-new-tokens 80
+```
+
+This is a greedy byte-level sample. It is only an inspection tool. It is not a chat interface.
+
+## Reading the result
+
+Use the recommendation field:
+
+| Result | Meaning |
+|---|---|
+| `KEEP` | Held-out loss improved and beat the byte-unigram baseline. Larger controlled tests are justified. |
+| `RE-TEST` | Some learning signal exists, but the result is weak or the validation set is too small. |
+| `KILL/REWORK` | Held-out loss did not improve under the budget. Do not scale this configuration. |
+
+## Limits
+
+- Tokenizer is byte-level and intentionally dependency-free.
+- Splits are hash-based by row text, not document-aware.
+- Duplicate templates can still leak structure across splits.
+- Lower loss does not prove semantic understanding.
+- No factuality, safety, instruction-following, or general reasoning evaluation is included yet.
