@@ -13,10 +13,12 @@ from wai_r0.eval.suite import run_suite
 from wai_r0.report import BenchmarkReport, markdown_from_json
 from wai_r0.training.language_csv import (
     CSVSplitSpec,
+    CSVTrainingStep,
     audit_language_csv,
     csv_language_probe_report,
     generate_from_csv_checkpoint,
     inspect_language_csv,
+    iter_generate_from_csv_checkpoint,
 )
 from wai_r0.training.markdown_plan import run_markdown_training_plan
 
@@ -145,6 +147,10 @@ def _write_json_payload(payload: dict, output: str | None) -> None:
         print(text)
 
 
+def _stream_training_step(step: CSVTrainingStep) -> None:
+    print("[train] " + json.dumps(step.to_dict(), sort_keys=True), flush=True)
+
+
 def _csv_report_from_args(args: argparse.Namespace, csv_path: str | Path | None = None) -> BenchmarkReport:
     return csv_language_probe_report(
         cfg(args.config),
@@ -166,6 +172,7 @@ def _csv_report_from_args(args: argparse.Namespace, csv_path: str | Path | None 
         test_fraction=args.test_fraction,
         split_seed=args.split_seed,
         baseline_rows=args.baseline_rows,
+        progress_callback=_stream_training_step if getattr(args, "stream", False) else None,
     )
 
 
@@ -191,6 +198,20 @@ def _cmd_suite(args: argparse.Namespace) -> None:
 
 
 def _cmd_sample_csv(args: argparse.Namespace) -> None:
+    if args.stream:
+        chunks: list[str] = []
+        for chunk in iter_generate_from_csv_checkpoint(args.checkpoint, prompt=args.prompt, max_new_tokens=args.max_new_tokens):
+            chunks.append(chunk)
+            print(chunk, end="", flush=True)
+        text = "".join(chunks)
+        if args.output:
+            path = Path(args.output)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            print(f"\n{path}")
+        else:
+            print()
+        return
     text = generate_from_csv_checkpoint(args.checkpoint, prompt=args.prompt, max_new_tokens=args.max_new_tokens)
     if args.output:
         path = Path(args.output)
@@ -223,10 +244,17 @@ def add_csv_training_args(parser: argparse.ArgumentParser, *, include_csv_path: 
     parser.add_argument("--resume-from")
     parser.add_argument("--log")
     parser.add_argument("--output")
+    parser.add_argument("--stream", action="store_true", help="print compact JSON progress lines while training")
 
 
 def main(argv: list[str] | None = None) -> int:
-    argv = normalize_legacy_train_args(argv)
+    raw_args = sys.argv[1:] if argv is None else list(argv)
+    if not raw_args:
+        from wai_r0.gui import launch_gui
+
+        launch_gui()
+        return 0
+    argv = normalize_legacy_train_args(raw_args)
     parser = argparse.ArgumentParser(prog="wai-r0")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -298,6 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     sample_csv.add_argument("--checkpoint", required=True)
     sample_csv.add_argument("--prompt", default="")
     sample_csv.add_argument("--max-new-tokens", type=int, default=64)
+    sample_csv.add_argument("--stream", action="store_true", help="stream generated text chunks as they are produced")
     sample_csv.add_argument("--output")
 
     abl = sub.add_parser("ablate")
@@ -322,6 +351,8 @@ def main(argv: list[str] | None = None) -> int:
     suite = sub.add_parser("suite")
     suite.add_argument("--config", default="configs/model/nano.yaml")
     suite.add_argument("--suite", default="configs/benchmark/suite.yaml")
+
+    sub.add_parser("gui", help="open the Tkinter local training and checkpoint console")
 
     rep = sub.add_parser("report")
     rep.add_argument("--input", required=True)
@@ -362,6 +393,10 @@ def main(argv: list[str] | None = None) -> int:
         print(guard.summary(findings))
     elif args.cmd == "suite":
         _cmd_suite(args)
+    elif args.cmd == "gui":
+        from wai_r0.gui import launch_gui
+
+        launch_gui()
     elif args.cmd == "report":
         md = markdown_from_json(args.input)
         if args.output:

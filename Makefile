@@ -1,7 +1,10 @@
-.PHONY: test zero prior memory symbolic symbolic-holdout tiny train-csv inspect-csv ablate suite leakage holdout smoke
+.PHONY: test gui zero prior memory symbolic symbolic-holdout tiny train-csv inspect-csv ablate suite leakage holdout smoke
 
 test:
 	pytest
+
+gui:
+	PYTHONPATH=src python main.py
 
 zero:
 	PYTHONPATH=src python -m wai_r0 zero-neural --config configs/model/nano.yaml

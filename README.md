@@ -4,7 +4,7 @@ WAI-R0 is a zero-training reasoning architecture lab.
 
 It does **not** claim random neural networks can reason. It tests whether a reasoning-oriented architecture has measurable structure worth training: stable signal propagation, memory behavior, recurrent latent refinement, MoE routing health, symbolic search compatibility, verifier integration, and tiny-training sample efficiency.
 
-Status: `v0.4 research prototype`.
+Status: `v0.4.1 local CSV language-readiness prototype`.
 
 ## What is implemented
 
@@ -18,7 +18,6 @@ Status: `v0.4 research prototype`.
 - Deterministic generated ARC-style holdouts for local dev/validation separation.
 - Multi-seed ablation matrix including A7 symbolic-only and A8 hybrid variants.
 - Tiny-training probes with length extrapolation checks.
-- CSV language-readiness harness with corpus audit, deterministic splits, byte baselines, held-out validation, checkpoint/resume, and JSONL training logs.
 - JSON and markdown report export with metadata, limitations, and conservative recommendations.
 - CPU-safe tests.
 
@@ -42,14 +41,10 @@ wai-r0 leakage-check --tasks examples/generated_holdouts --split generated_holdo
 wai-r0 tiny-train --task copy --model configs/model/nano.yaml --examples 32 --train-len 8 --eval-lens 8,16,32
 wai-r0 train examples/training.md
 python main.py -train examples/training.md
-wai-r0 inspect-csv --csv training/basic_language_sample.csv
-wai-r0 audit-csv --csv training/basic_language_sample.csv --output reports/csv_audit.json
-wai-r0 train-csv --csv training/basic_language_sample.csv --steps 25 --batch-size 4 --seq-len 64 --checkpoint reports/csv_probe.pt --log reports/csv_probe.jsonl
-python main.py -train training/basic_language_sample.csv --steps 5
-wai-r0 sample-csv --checkpoint reports/csv_probe.pt --prompt "A noun is" --max-new-tokens 40
 wai-r0 ablate --matrix configs/benchmark/ablation.yaml --seeds 1337,2026 --tiny-examples 8
 wai-r0 suite --config configs/model/nano.yaml --suite configs/benchmark/suite.yaml
 wai-r0 report --input reports/latest.json --format md
+python main.py  # opens the local Tkinter workbench
 ```
 
 Use larger tiny-training budgets only after the smoke path works on your hardware.
@@ -62,44 +57,20 @@ Use larger tiny-training budgets only after the smoke path works on your hardwar
 | `architecture-prior diagnostic` | No-gradient architecture mechanics: activation stability, position proxy, identity signal, memory mechanics, recurrence, and routing. |
 | `zero-training symbolic solver result` | Explicit symbolic program search. Not neural reasoning. |
 | `tiny-training architecture probe` | Small supervised algorithmic learning probe. |
-| `v0.4 CSV language-readiness experiment` | Held-out byte-level CSV training with corpus audit and baselines. Not semantic understanding. |
 | `mixed architecture diagnostic` | Ablation report combining diagnostics; still not proof of reasoning. |
 
 
-## v0.4 additions
 
-| Area | What changed | Why it matters |
-|---|---|---|
-| CSV audit | Adds `audit-csv` with duplicate rate, row statistics, and deterministic split counts | A 500k-line CSV needs dataset hygiene before training. |
-| Held-out language probe | `train-csv` now uses stable train/validation/test splits | Loss movement is measured on held-out rows instead of the same stream only. |
-| Baselines | Adds uniform and byte-unigram baselines | Prevents a tiny model from looking good when it only learns byte frequency. |
-| Checkpoints | Adds checkpoint, best-checkpoint, resume, and JSONL logs | Makes interrupted experiments reproducible and inspectable. |
-| Sampling | Adds `sample-csv` checkpoint inspection | Lets you inspect artifacts without pretending it is a chat model. |
+## v0.4.1 GUI update
 
-Recommended 500k-line run:
+`python main.py` now opens a local Tkinter workbench when no CLI arguments are supplied. The GUI lets you select a CSV file, audit it, launch CSV training with streamed logs, stop the run, sample from a checkpoint, and trigger the main benchmark commands. The GUI runs the same CLI commands underneath; it does not create a separate training path. See `docs/TKINTER_WORKBENCH.md`.
+
+CLI streaming was also added:
 
 ```bash
-wai-r0 audit-csv \
-  --csv training/basic_lang_500k.csv \
-  --text-column text \
-  --max-rows 500000 \
-  --output reports/csv_audit.json
-
-wai-r0 train-csv \
-  --csv training/basic_lang_500k.csv \
-  --text-column text \
-  --steps 500 \
-  --batch-size 16 \
-  --seq-len 128 \
-  --max-rows 500000 \
-  --eval-rows 256 \
-  --eval-interval 25 \
-  --baseline-rows 2048 \
-  --checkpoint reports/csv_probe.pt \
-  --log reports/csv_probe_train.jsonl \
-  --output reports/csv_language_readiness
+wai-r0 train-csv --csv training/basic_lang_500k.csv --text-column text --stream
+wai-r0 sample-csv --checkpoint reports/csv_probe.best.pt --prompt "A noun is" --stream
 ```
-
 
 ## v0.3 additions
 
@@ -164,9 +135,8 @@ src/wai_r0/
   training/
     probes.py            tiny supervised algorithmic probes
     markdown_plan.py     declarative Markdown training-plan parser
-    language_csv.py      CSV audit, byte tokenizer, baselines, held-out training, checkpoint/resume
 ```
 
 ## Current recommendation
 
-v0.4 is good enough for local architecture iteration and CSV language-readiness experiments. It is **not** enough to justify serious pretraining by itself. The next experiment should add a real tokenizer, more algorithmic probes, longer-context profiler runs, baseline-vs-candidate plots, and stricter per-component keep/kill thresholds.
+v0.3 is good enough for local architecture iteration and honest diagnostic reports. It is **not** enough to justify serious pretraining. The next experiment should add broader algorithmic probes, longer-context profiler runs, baseline-vs-candidate plots, and stricter per-component keep/kill thresholds.

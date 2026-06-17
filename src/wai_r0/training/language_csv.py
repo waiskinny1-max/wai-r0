@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from itertools import islice
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Literal
+from typing import Any, Callable, Iterable, Iterator, Literal
 import csv
 import hashlib
 import json
@@ -546,6 +546,13 @@ def _write_jsonl(path: Path, rows: list[CSVTrainingStep]) -> None:
             handle.write(json.dumps(row.to_dict(), sort_keys=True) + "\n")
 
 
+def _append_jsonl(path: Path, row: CSVTrainingStep) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row.to_dict(), sort_keys=True) + "\n")
+        handle.flush()
+
+
 def _save_checkpoint(
     checkpoint: Path,
     core: ReasonerCore,
@@ -608,6 +615,7 @@ def run_csv_language_probe(
     test_fraction: float = 0.05,
     split_seed: int | None = None,
     baseline_rows: int = 256,
+    progress_callback: Callable[[CSVTrainingStep], None] | None = None,
 ) -> CSVLanguageProbeResult:
     """Run a held-out CSV language-readiness experiment.
 
@@ -672,6 +680,11 @@ def run_csv_language_probe(
     if checkpoint is not None:
         best_checkpoint = checkpoint.with_name(f"{checkpoint.stem}.best{checkpoint.suffix or '.pt'}")
 
+    streaming_log: Path | None = Path(log_path) if log_path is not None else None
+    if streaming_log is not None and resume_from is None:
+        streaming_log.parent.mkdir(parents=True, exist_ok=True)
+        streaming_log.write_text("", encoding="utf-8")
+
     core.train()
     for step in range(1, steps + 1):
         batch = _next_text_batch(iterator, batch_size)
@@ -719,15 +732,18 @@ def run_csv_language_probe(
                     resumed_step + step,
                     eval_loss,
                 )
-        history.append(
-            CSVTrainingStep(
-                step=resumed_step + step,
-                train_loss=final_loss,
-                eval_loss=eval_loss,
-                eval_token_accuracy=eval_acc,
-                seconds_elapsed=float(time.perf_counter() - start),
-            )
+        step_record = CSVTrainingStep(
+            step=resumed_step + step,
+            train_loss=final_loss,
+            eval_loss=eval_loss,
+            eval_token_accuracy=eval_acc,
+            seconds_elapsed=float(time.perf_counter() - start),
         )
+        history.append(step_record)
+        if streaming_log is not None:
+            _append_jsonl(streaming_log, step_record)
+        if progress_callback is not None:
+            progress_callback(step_record)
 
     eval_loss, eval_acc = _evaluate(core, val_sample, tokenizer, safe_seq_len)
     checkpoint_out: str | None = None
@@ -757,7 +773,8 @@ def run_csv_language_probe(
     log_out: str | None = None
     if log_path is not None:
         log = Path(log_path)
-        _write_jsonl(log, history)
+        if streaming_log is None:
+            _write_jsonl(log, history)
         log_out = str(log)
 
     improvement_vs_initial = initial_eval_loss - eval_loss
@@ -838,6 +855,7 @@ def csv_language_probe_report(
     test_fraction: float = 0.05,
     split_seed: int | None = None,
     baseline_rows: int = 256,
+    progress_callback: Callable[[CSVTrainingStep], None] | None = None,
 ) -> BenchmarkReport:
     """Return a standard WAI-R0 report for a CSV language-readiness run."""
 
@@ -861,6 +879,7 @@ def csv_language_probe_report(
         test_fraction=test_fraction,
         split_seed=split_seed,
         baseline_rows=baseline_rows,
+        progress_callback=progress_callback,
     )
     return BenchmarkReport(
         name="csv_language_readiness",
@@ -904,6 +923,47 @@ def csv_language_probe_report(
         ],
         recommendation=result.recommendation,
     )
+
+
+@torch.no_grad()
+def iter_generate_from_csv_checkpoint(
+    checkpoint_path: str | Path,
+    prompt: str = "",
+    max_new_tokens: int = 64,
+) -> Iterator[str]:
+    """Yield greedy byte-level sample chunks from a CSV checkpoint.
+
+    The generator emits newly decoded text fragments so a GUI or terminal can
+    display output incrementally. This is checkpoint inspection, not proof of
+    conversational ability.
+    """
+
+    if max_new_tokens <= 0:
+        raise ValueError("max_new_tokens must be positive")
+    checkpoint = torch.load(Path(checkpoint_path), map_location="cpu")
+    config_data = checkpoint.get("model_config")
+    if not isinstance(config_data, dict):
+        raise ValueError("checkpoint missing model_config")
+    cfg = language_ready_config(ReasonerConfig.from_dict(config_data))
+    core = ReasonerCore(cfg)
+    state = checkpoint.get("model_state_dict")
+    if not isinstance(state, dict):
+        raise ValueError("checkpoint missing model_state_dict")
+    core.load_state_dict(state)
+    core.eval()
+    tokenizer = ByteTokenizer()
+    ids = tokenizer.encode(prompt, min(max(4, cfg.max_seq_len), max(4, len(prompt.encode("utf-8")) + 2)))
+    tokens = torch.tensor([ids], dtype=torch.long, device=core.device_obj)
+    previous = tokenizer.decode(tokens[0].tolist())
+    for _ in range(max_new_tokens):
+        context = tokens[:, -cfg.max_seq_len :]
+        logits = core.transformer(context)
+        next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        tokens = torch.cat([tokens, next_token], dim=1)
+        decoded = tokenizer.decode(tokens[0].tolist())
+        if len(decoded) > len(previous):
+            yield decoded[len(previous) :]
+        previous = decoded
 
 
 @torch.no_grad()

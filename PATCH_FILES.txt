@@ -1,12 +1,9 @@
+Makefile
 README.md
-docs/CSV_LANGUAGE_TRAINING.md
-docs/V0_4_CHANGELOG.md
-scripts/audit_training_csv.py
-scripts/sample_csv_checkpoint.py
+pyproject.toml
+docs/TKINTER_WORKBENCH.md
 src/wai_r0/cli.py
+src/wai_r0/gui.py
 src/wai_r0/training/language_csv.py
-src/wai_r0/training/markdown_plan.py
-tests/test_v04_csv_training.py
-training/README.md
-training/csv_language_probe.md
+tests/test_v041_gui.py
 PATCH_FILES.txt
