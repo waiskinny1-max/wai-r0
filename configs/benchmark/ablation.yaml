@@ -1,0 +1,8 @@
+variants:
+  - {name: A0, attention: mha, moe: false, recurrent: false}
+  - {name: A1, attention: gqa, moe: false, recurrent: false}
+  - {name: A2, attention: mla_lite, moe: false, recurrent: false}
+  - {name: A3, attention: mha, moe: true, recurrent: false}
+  - {name: A4, attention: mha, moe: false, recurrent: true}
+  - {name: A5, attention: mla_lite, moe: false, recurrent: true}
+  - {name: A6, attention: mla_lite, moe: true, recurrent: true}

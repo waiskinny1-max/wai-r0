@@ -1,0 +1,25 @@
+[build-system]
+requires=["setuptools>=69","wheel"]
+build-backend="setuptools.build_meta"
+
+[project]
+name="wai-r0"
+version="0.1.0"
+description="A zero-training reasoning architecture lab for deciding what is worth training."
+readme="README.md"
+requires-python=">=3.10"
+dependencies=["torch>=2.2","PyYAML>=6.0"]
+
+[project.optional-dependencies]
+dev=["pytest>=8.0"]
+
+[project.scripts]
+wai-r0="wai_r0.cli:main"
+
+[tool.setuptools.packages.find]
+where=["src"]
+
+[tool.pytest.ini_options]
+pythonpath=["src"]
+testpaths=["tests"]
+addopts="-q"

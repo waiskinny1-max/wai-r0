@@ -1,0 +1,73 @@
+{
+  "benchmark_config": {},
+  "date": "2026-06-17T15:02:23.385758+00:00",
+  "device": "cpu",
+  "dtype": "float32",
+  "git_commit": null,
+  "hardware": {
+    "cuda_available": false,
+    "cuda_device": null,
+    "platform": "Linux-4.4.0-x86_64-with-glibc2.41",
+    "python": "3.13.5",
+    "torch": "2.10.0+cpu"
+  },
+  "limitations": [
+    "Random weights do not reason.",
+    "Single local run; vary seeds and tasks before scaling."
+  ],
+  "model_config": {
+    "attention_type": "mha",
+    "d_ff": 64,
+    "d_model": 32,
+    "device": "cpu",
+    "dropout": 0.0,
+    "dtype": "float32",
+    "experts_per_token": 1,
+    "latent_scratchpad_size": 8,
+    "max_seq_len": 64,
+    "mla_latent_dim": 12,
+    "n_experts": 4,
+    "n_heads": 4,
+    "n_kv_heads": 4,
+    "n_layers": 1,
+    "recurrent_depth": 1,
+    "seed": 1337,
+    "tie_embeddings": true,
+    "use_moe": false,
+    "vocab_size": 64
+  },
+  "name": "zero_neural",
+  "raw_metrics": {
+    "finite_gradients": true,
+    "finite_logits": true,
+    "grad_norm_mean": 0.17428527763960036,
+    "inspection": {
+      "diagnostics": {
+        "activation_norms": [
+          5.730040550231934,
+          5.750452041625977
+        ],
+        "attention": [
+          {
+            "attention_entropy": 1.2812066078186035,
+            "compression_ratio": null,
+            "kv_cache_bytes": 2048
+          }
+        ],
+        "moe": []
+      },
+      "finite": true,
+      "logits_shape": [
+        1,
+        8,
+        64
+      ],
+      "recurrent": null
+    },
+    "r0_stability_score": 0.9999999999999999
+  },
+  "recommendation": "SCALE CAREFULLY \u2014 worth serious pretraining investigation.",
+  "result_type": "zero-training neural diagnostic",
+  "seed": 1337,
+  "summary": "Random-weight numerical diagnostic completed. This is not an intelligence result."
+}

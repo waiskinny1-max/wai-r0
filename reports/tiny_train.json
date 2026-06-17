@@ -1,0 +1,54 @@
+{
+  "benchmark_config": {
+    "examples": 8,
+    "task": "copy"
+  },
+  "date": "2026-06-17T15:03:02.198249+00:00",
+  "device": "cpu",
+  "dtype": "float32",
+  "git_commit": null,
+  "hardware": {
+    "cuda_available": false,
+    "cuda_device": null,
+    "platform": "Linux-4.4.0-x86_64-with-glibc2.41",
+    "python": "3.13.5",
+    "torch": "2.10.0+cpu"
+  },
+  "limitations": [
+    "Tiny smoke budget only.",
+    "Run multiple seeds and OOD lengths for real decisions."
+  ],
+  "model_config": {
+    "attention_type": "mha",
+    "d_ff": 64,
+    "d_model": 32,
+    "device": "cpu",
+    "dropout": 0.0,
+    "dtype": "float32",
+    "experts_per_token": 1,
+    "latent_scratchpad_size": 8,
+    "max_seq_len": 64,
+    "mla_latent_dim": 12,
+    "n_experts": 4,
+    "n_heads": 4,
+    "n_kv_heads": 4,
+    "n_layers": 1,
+    "recurrent_depth": 1,
+    "seed": 1337,
+    "tie_embeddings": true,
+    "use_moe": false,
+    "vocab_size": 64
+  },
+  "name": "tiny_train",
+  "raw_metrics": {
+    "examples": 8,
+    "final_loss": 4.94314235766069e-06,
+    "initial_loss": 2.114687958965078e-05,
+    "loss_delta": 1.620373723199009e-05,
+    "task": "copy"
+  },
+  "recommendation": "TINY-TRAIN ONLY \u2014 promising but unproven.",
+  "result_type": "tiny-training architecture probe",
+  "seed": 1337,
+  "summary": "Tiny supervised algorithmic probe. Not pretrained reasoning."
+}

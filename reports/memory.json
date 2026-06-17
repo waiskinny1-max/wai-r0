@@ -1,0 +1,78 @@
+{
+  "benchmark_config": {
+    "baseline": "mha",
+    "candidate": "mla_lite",
+    "seq_lens": [
+      16,
+      32,
+      64
+    ]
+  },
+  "date": "2026-06-17T15:02:33.011572+00:00",
+  "device": "cpu",
+  "dtype": "float32",
+  "git_commit": null,
+  "hardware": {
+    "cuda_available": false,
+    "cuda_device": null,
+    "platform": "Linux-4.4.0-x86_64-with-glibc2.41",
+    "python": "3.13.5",
+    "torch": "2.10.0+cpu"
+  },
+  "limitations": [
+    "Static estimate; profile target hardware.",
+    "MLA-lite is not DeepSeek MLA."
+  ],
+  "model_config": {
+    "attention_type": "mha",
+    "d_ff": 64,
+    "d_model": 32,
+    "device": "cpu",
+    "dropout": 0.0,
+    "dtype": "float32",
+    "experts_per_token": 1,
+    "latent_scratchpad_size": 8,
+    "max_seq_len": 64,
+    "mla_latent_dim": 12,
+    "n_experts": 4,
+    "n_heads": 4,
+    "n_kv_heads": 4,
+    "n_layers": 1,
+    "recurrent_depth": 1,
+    "seed": 1337,
+    "tie_embeddings": true,
+    "use_moe": false,
+    "vocab_size": 64
+  },
+  "name": "memory",
+  "raw_metrics": {
+    "average_candidate_over_baseline": 0.1875,
+    "rows": [
+      {
+        "baseline_bytes": 4096,
+        "candidate_bytes": 768,
+        "candidate_over_baseline": 0.1875,
+        "saved_bytes": 3328,
+        "seq_len": 16
+      },
+      {
+        "baseline_bytes": 8192,
+        "candidate_bytes": 1536,
+        "candidate_over_baseline": 0.1875,
+        "saved_bytes": 6656,
+        "seq_len": 32
+      },
+      {
+        "baseline_bytes": 16384,
+        "candidate_bytes": 3072,
+        "candidate_over_baseline": 0.1875,
+        "saved_bytes": 13312,
+        "seq_len": 64
+      }
+    ]
+  },
+  "recommendation": "TINY-TRAIN ONLY \u2014 promising but unproven.",
+  "result_type": "architecture-prior diagnostic",
+  "seed": 1337,
+  "summary": "KV-cache memory estimate. Not a reasoning benchmark."
+}
