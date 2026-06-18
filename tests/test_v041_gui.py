@@ -65,3 +65,65 @@ def test_parse_training_event() -> None:
     parsed = parse_training_event("[train] " + json.dumps(payload))
     assert parsed == payload
     assert parse_training_event("ordinary output") is None
+
+
+def test_terminal_fallback_noninteractive(monkeypatch, capsys) -> None:
+    from wai_r0.gui import launch_tui
+
+    class NonInteractiveStdin:
+        def isatty(self) -> bool:
+            return False
+
+    monkeypatch.setattr(sys, "stdin", NonInteractiveStdin())
+    launch_tui("display unavailable")
+    out = capsys.readouterr().out
+    assert "GUI unavailable" in out
+    assert "train-csv" in out
+    assert "sample-csv" in out
+
+
+def test_gui_can_fall_back_when_tk_root_fails(monkeypatch, capsys) -> None:
+    import types
+
+    from wai_r0 import gui
+
+    class FakeTclError(Exception):
+        pass
+
+    class FakeTkModule:
+        TclError = FakeTclError
+
+        @staticmethod
+        def Tk():
+            raise FakeTclError("no display")
+
+    fake_ttk = types.SimpleNamespace(Style=lambda: None)
+    fake_filedialog = types.SimpleNamespace()
+    fake_messagebox = types.SimpleNamespace()
+
+    real_import = __import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "tkinter" and not fromlist:
+            return FakeTkModule
+        if name == "tkinter" and fromlist:
+            namespace = types.SimpleNamespace(
+                filedialog=fake_filedialog,
+                messagebox=fake_messagebox,
+                ttk=fake_ttk,
+                TclError=FakeTclError,
+                Tk=FakeTkModule.Tk,
+            )
+            return namespace
+        return real_import(name, globals, locals, fromlist, level)
+
+    class NonInteractiveStdin:
+        def isatty(self) -> bool:
+            return False
+
+    monkeypatch.setattr("builtins.__import__", fake_import)
+    monkeypatch.setattr(sys, "stdin", NonInteractiveStdin())
+    gui.launch_gui(fallback_to_tui=True)
+    out = capsys.readouterr().out
+    assert "GUI unavailable" in out
+    assert "audit-csv" in out

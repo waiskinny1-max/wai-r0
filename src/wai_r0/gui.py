@@ -155,9 +155,176 @@ def parse_training_event(line: str) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def launch_gui() -> None:
-    import tkinter as tk
-    from tkinter import filedialog, messagebox, ttk
+def _default_env() -> dict[str, str]:
+    env = os.environ.copy()
+    src = str(Path.cwd() / "src")
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = src if not existing else src + os.pathsep + existing
+    return env
+
+
+def _run_streaming_command(cmd: list[str]) -> int:
+    print("\n$ " + " ".join(cmd), flush=True)
+    try:
+        process = subprocess.Popen(
+            cmd,
+            cwd=Path.cwd(),
+            env=_default_env(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            bufsize=1,
+        )
+    except OSError as exc:
+        print(f"[workbench] failed to start process: {exc}", file=sys.stderr)
+        return 127
+    assert process.stdout is not None
+    for line in process.stdout:
+        print(line, end="", flush=True)
+    return process.wait()
+
+
+def _prompt_text(label: str, default: str = "") -> str:
+    suffix = f" [{default}]" if default else ""
+    value = input(f"{label}{suffix}: ").strip()
+    return value or default
+
+
+def _prompt_int(label: str, default: int) -> int:
+    while True:
+        raw = _prompt_text(label, str(default))
+        try:
+            return int(raw)
+        except ValueError:
+            print("enter an integer")
+
+
+def _prompt_float(label: str, default: float) -> float:
+    while True:
+        raw = _prompt_text(label, str(default))
+        try:
+            return float(raw)
+        except ValueError:
+            print("enter a number")
+
+
+def _prompt_optional_int(label: str, default: int | None) -> int | None:
+    raw_default = "" if default is None else str(default)
+    raw = _prompt_text(label, raw_default)
+    if raw == "":
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        print("invalid integer; leaving unset")
+        return None
+
+
+def _print_noninteractive_help(reason: str | None = None) -> None:
+    if reason:
+        print(f"[workbench] GUI unavailable: {reason}")
+    print(
+        "WAI-R0 could not open an interactive window or terminal menu.\n"
+        "Use one of these direct commands instead:\n\n"
+        "  python main.py gui\n"
+        "  python main.py audit-csv --csv training/basic_language_sample.csv --text-column text\n"
+        "  python main.py train-csv --csv training/basic_language_sample.csv --text-column text --stream\n"
+        "  python main.py sample-csv --checkpoint reports/csv_probe.pt --prompt 'A noun is' --stream\n"
+    )
+
+
+def launch_tui(reason: str | None = None) -> None:
+    """Open a terminal fallback for environments without a Tk display.
+
+    This keeps ``python main.py`` usable in SSH, WSL/headless shells, CI
+    containers, and Linux systems missing ``python3-tk``. Long-running work is
+    delegated to the same CLI subprocesses as the Tkinter workbench, so behavior
+    stays consistent between GUI and terminal modes.
+    """
+
+    if not sys.stdin.isatty():
+        _print_noninteractive_help(reason)
+        return
+
+    if reason:
+        print(f"[workbench] Tkinter GUI unavailable: {reason}")
+        print("[workbench] using terminal fallback.\n")
+
+    while True:
+        print(
+            "\nWAI-R0 terminal workbench\n"
+            "  1) Audit CSV\n"
+            "  2) Train CSV language probe\n"
+            "  3) Sample checkpoint\n"
+            "  4) Zero-neural benchmark\n"
+            "  5) Architecture-priors benchmark\n"
+            "  6) Symbolic ARC benchmark\n"
+            "  7) Suite benchmark\n"
+            "  q) Quit"
+        )
+        choice = _prompt_text("select", "q").lower()
+        if choice in {"q", "quit", "exit"}:
+            return
+        try:
+            if choice == "1":
+                csv_path = _prompt_text("CSV path", "training/basic_language_sample.csv")
+                text_column = _prompt_text("text column", "text")
+                target_column = _prompt_text("target column", "")
+                max_rows = _prompt_optional_int("max rows", 500_000)
+                cmd = build_audit_csv_command(csv_path, text_column, target_column, max_rows)
+            elif choice == "2":
+                options = CSVTrainGuiOptions(
+                    csv_path=_prompt_text("CSV path", "training/basic_language_sample.csv"),
+                    config=_prompt_text("model config", "configs/model/nano.yaml"),
+                    text_column=_prompt_text("text column", "text"),
+                    target_column=_prompt_text("target column", ""),
+                    steps=_prompt_int("steps", 500),
+                    batch_size=_prompt_int("batch size", 8),
+                    seq_len=_prompt_int("sequence length", 128),
+                    max_rows=_prompt_optional_int("max rows", 500_000),
+                    eval_rows=_prompt_int("eval rows", 256),
+                    eval_interval=_prompt_int("eval interval", 25),
+                    baseline_rows=_prompt_int("baseline rows", 2048),
+                    lr=_prompt_float("learning rate", 3e-4),
+                    checkpoint=_prompt_text("checkpoint", "reports/csv_probe.pt"),
+                    log=_prompt_text("JSONL log", "reports/csv_probe_train.jsonl"),
+                    output=_prompt_text("report stem", "reports/csv_language_readiness"),
+                )
+                cmd = build_train_csv_command(options)
+            elif choice == "3":
+                cmd = build_sample_csv_command(
+                    _prompt_text("checkpoint", "reports/csv_probe.pt"),
+                    _prompt_text("prompt", "A noun is"),
+                    _prompt_int("max new tokens", 120),
+                )
+            elif choice == "4":
+                cmd = build_benchmark_command("zero", _prompt_text("model config", "configs/model/nano.yaml"))
+            elif choice == "5":
+                cmd = build_benchmark_command("prior", _prompt_text("model config", "configs/model/nano.yaml"))
+            elif choice == "6":
+                cmd = build_benchmark_command("symbolic", _prompt_text("model config", "configs/model/nano.yaml"))
+            elif choice == "7":
+                cmd = build_benchmark_command("suite", _prompt_text("model config", "configs/model/nano.yaml"))
+            else:
+                print("unknown option")
+                continue
+        except ValueError as exc:
+            print(f"[workbench] {exc}")
+            continue
+        code = _run_streaming_command(cmd)
+        print(f"[workbench] exit code: {code}")
+
+
+def launch_gui(*, fallback_to_tui: bool = True) -> None:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog, messagebox, ttk
+    except Exception as exc:  # Tkinter can be missing on minimal Linux installs.
+        if fallback_to_tui:
+            launch_tui(str(exc))
+            return
+        raise
 
     class ProcessHandle:
         def __init__(self, app: "WaiR0Workbench") -> None:
@@ -175,9 +342,7 @@ def launch_gui() -> None:
                 return
             self.app.clear_progress()
             self.app.append_console(f"\n$ {' '.join(cmd)}\n", tag="cmd")
-            env = os.environ.copy()
-            src = str(Path.cwd() / "src")
-            env["PYTHONPATH"] = src + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+            env = _default_env()
             self.started_at = time.perf_counter()
             try:
                 self.process = subprocess.Popen(
@@ -513,7 +678,13 @@ def launch_gui() -> None:
                 pass
             self.root.after(80, self._drain)
 
-    root = tk.Tk()
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        if fallback_to_tui:
+            launch_tui(str(exc))
+            return
+        raise
     try:
         ttk.Style().theme_use("clam")
     except tk.TclError:

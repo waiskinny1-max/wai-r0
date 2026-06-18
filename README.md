@@ -61,9 +61,13 @@ Use larger tiny-training budgets only after the smoke path works on your hardwar
 
 
 
+## v0.4.2 workbench fallback fix
+
+`python main.py` still opens the local Tkinter workbench when a desktop display is available. If Tkinter is missing or cannot connect to a display, it now falls back to a terminal workbench instead of crashing. In non-interactive shells, it prints direct command examples and exits cleanly. See `docs/V0_4_2_CHANGELOG.md` and `docs/TKINTER_WORKBENCH.md`.
+
 ## v0.4.1 GUI update
 
-`python main.py` now opens a local Tkinter workbench when no CLI arguments are supplied. The GUI lets you select a CSV file, audit it, launch CSV training with streamed logs, stop the run, sample from a checkpoint, and trigger the main benchmark commands. The GUI runs the same CLI commands underneath; it does not create a separate training path. See `docs/TKINTER_WORKBENCH.md`.
+`python main.py` opens a local Tkinter workbench when no CLI arguments are supplied and a display is available. The GUI lets you select a CSV file, audit it, launch CSV training with streamed logs, stop the run, sample from a checkpoint, and trigger the main benchmark commands. The GUI runs the same CLI commands underneath; it does not create a separate training path. See `docs/TKINTER_WORKBENCH.md`.
 
 CLI streaming was also added:
 
