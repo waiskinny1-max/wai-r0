@@ -52,3 +52,13 @@ wai-r0 train-csv \
 ## Ignored files
 
 `training/.gitignore` ignores real training corpora and checkpoints. Keep only small examples in git.
+
+## 500k instruction CSV format
+
+If your dataset uses:
+
+```csv
+id,split,task_family,difficulty,system,user,assistant,answer_format,eval_type,metadata_json
+```
+
+put it in this directory and leave text/target columns blank in the GUI. The trainer auto-combines `system`, `user`, and `assistant`.

@@ -65,3 +65,14 @@ It prints compact progress events:
 ```
 
 The GUI parses these lines and updates the progress readout.
+
+## Chat CSV column settings
+
+For instruction CSVs with `system,user,assistant`, leave both GUI fields blank:
+
+```text
+Text column:   blank
+Target column: blank
+```
+
+The trainer will auto-detect the chat schema. The old `text` default is no longer correct for this dataset.

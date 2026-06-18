@@ -26,6 +26,10 @@ BYTE_OFFSET = 3
 _PROMPT_COLUMNS = ("prompt", "instruction", "input", "question", "source")
 _TARGET_COLUMNS = ("completion", "response", "output", "answer", "target")
 _TEXT_COLUMNS = ("text", "content", "sentence", "sample")
+_SYSTEM_COLUMNS = ("system", "system_prompt", "developer", "instruction_context")
+_USER_COLUMNS = ("user", "prompt", "instruction", "input", "question")
+_ASSISTANT_COLUMNS = ("assistant", "completion", "response", "output", "answer", "target")
+_SPLIT_COLUMNS = ("split", "subset", "partition")
 SplitName = Literal["train", "val", "test", "all"]
 
 
@@ -219,40 +223,110 @@ def _first_present(header: list[str], candidates: tuple[str, ...]) -> str | None
     return None
 
 
+def _has_chat_columns(header: list[str]) -> bool:
+    return _first_present(header, _USER_COLUMNS) is not None and _first_present(header, _ASSISTANT_COLUMNS) is not None
+
+
+def _declared_split(row: dict[str, str]) -> str | None:
+    for column in _SPLIT_COLUMNS:
+        for actual in row:
+            if actual.lower() == column:
+                raw = str(row.get(actual, "") or "").strip().lower()
+                if raw in {"train", "training"}:
+                    return "train"
+                if raw in {"val", "valid", "validation", "dev", "eval", "evaluation"}:
+                    return "val"
+                if raw in {"test", "holdout", "heldout"}:
+                    return "test"
+    return None
+
+
 def detect_language_columns(
     header: list[str],
     text_column: str | None = None,
     target_column: str | None = None,
 ) -> tuple[str, str | None]:
+    """Detect the columns that should become language-probe text.
+
+    Supported shapes:
+    - single text: ``text`` / ``content`` / ``sentence``
+    - prompt-target: ``prompt`` + ``response`` / ``answer``
+    - chat CSV: ``system`` + ``user`` + ``assistant`` with optional ``split``
+
+    The user's 500k dataset uses the chat CSV shape. For that schema the
+    returned pair is normally ``("user", "assistant")``; ``_row_text`` will
+    include the system message automatically when present.
+    """
+
+    chat_user = _first_present(header, _USER_COLUMNS)
+    chat_assistant = _first_present(header, _ASSISTANT_COLUMNS)
+    has_chat = chat_user is not None and chat_assistant is not None
+
     if text_column:
         if text_column not in header:
-            raise ValueError(f"text column '{text_column}' not found. Available columns: {', '.join(header)}")
-        detected_text = text_column
+            # Common GUI footgun: old versions defaulted to text, but instruction
+            # datasets usually have user/assistant instead. Auto-recover only for
+            # the exact old default so explicit misspellings still fail loudly.
+            if text_column.strip().lower() == "text" and has_chat:
+                detected_text = chat_user
+            else:
+                raise ValueError(f"text column '{text_column}' not found. Available columns: {', '.join(header)}")
+        else:
+            detected_text = text_column
     else:
-        detected_text = (
-            _first_present(header, _TEXT_COLUMNS)
-            or _first_present(header, _PROMPT_COLUMNS)
-            or header[0]
-        )
+        if has_chat:
+            detected_text = chat_user
+        else:
+            detected_text = (
+                _first_present(header, _TEXT_COLUMNS)
+                or _first_present(header, _PROMPT_COLUMNS)
+                or header[0]
+            )
 
     if target_column:
         if target_column not in header:
             raise ValueError(f"target column '{target_column}' not found. Available columns: {', '.join(header)}")
         detected_target = target_column
     else:
-        detected_target = _first_present([column for column in header if column != detected_text], _TARGET_COLUMNS)
+        if has_chat and detected_text == chat_user:
+            detected_target = chat_assistant
+        else:
+            detected_target = _first_present([column for column in header if column != detected_text], _TARGET_COLUMNS)
     return detected_text, detected_target
+
+def _first_row_value(row: dict[str, str], candidates: tuple[str, ...]) -> str:
+    for candidate in candidates:
+        for actual in row:
+            if actual.lower() == candidate:
+                value = str(row.get(actual, "") or "").strip()
+                if value:
+                    return value
+    return ""
 
 
 def _row_text(row: dict[str, str], text_column: str, target_column: str | None) -> str:
     text = str(row.get(text_column, "") or "").strip()
+    target = str(row.get(target_column, "") or "").strip() if target_column is not None else ""
+
+    # Instruction/chat dataset support. This is intentionally plain text so the
+    # byte-level tokenizer can learn a stable conversational envelope without
+    # needing a special-token vocabulary.
+    if text_column.lower() in _USER_COLUMNS and target_column and target_column.lower() in _ASSISTANT_COLUMNS:
+        system = _first_row_value(row, _SYSTEM_COLUMNS)
+        parts: list[str] = []
+        if system:
+            parts.append(f"SYSTEM:\n{system}")
+        if text:
+            parts.append(f"USER:\n{text}")
+        if target:
+            parts.append(f"ASSISTANT:\n{target}")
+        return "\n\n".join(parts)
+
     if target_column is None:
         return text
-    target = str(row.get(target_column, "") or "").strip()
     if text and target:
         return f"{text}\n{target}"
     return text or target
-
 
 def stable_row_hash(text: str, seed: int = 1337) -> int:
     payload = f"{seed}\0{text}".encode("utf-8", errors="replace")
@@ -311,10 +385,14 @@ def iter_language_examples(
             if not text:
                 continue
             count += 1
-            if split != "all" and split_for_text(text, spec) != split:
-                continue
+            if split != "all":
+                declared = _declared_split(row)
+                if declared is not None:
+                    if declared != split:
+                        continue
+                elif split_for_text(text, spec) != split:
+                    continue
             yield text
-
 
 def inspect_language_csv(
     path: str | Path,
@@ -342,6 +420,8 @@ def inspect_language_csv(
         warnings.append("text column was inferred from the first CSV column; pass --text-column to make this explicit")
     if target_col is None and any(column.lower() in _TARGET_COLUMNS for column in header):
         warnings.append("a target-like column exists but was not paired; pass --target-column if this is supervised prompt/completion data")
+    if _has_chat_columns(header):
+        warnings.append("chat CSV schema detected; rows will be formatted as SYSTEM/USER/ASSISTANT training text")
 
     sampled = len(lengths)
     return CSVInspection(
@@ -386,24 +466,29 @@ def audit_language_csv(
     seen_hashes: set[int] = set()
     duplicates = 0
 
-    for text in iter_language_texts(csv_path, text_col, target_col, max_rows=max_rows):
-        rows_seen += 1
-        if not text:
-            continue
-        nonempty += 1
-        length = len(text)
-        byte_length = len(text.encode("utf-8", errors="replace"))
-        total_chars += length
-        total_bytes += byte_length
-        min_chars = length if min_chars is None else min(min_chars, length)
-        max_chars = max(max_chars, length)
-        split_name = split_for_text(text, spec)
-        split_counts[split_name] += 1
-        row_hash = stable_row_hash(text, seed=0)
-        if row_hash in seen_hashes:
-            duplicates += 1
-        else:
-            seen_hashes.add(row_hash)
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            if max_rows is not None and rows_seen >= max_rows:
+                break
+            text = _row_text(row, text_col, target_col)
+            if not text:
+                continue
+            rows_seen += 1
+            nonempty += 1
+            length = len(text)
+            byte_length = len(text.encode("utf-8", errors="replace"))
+            total_chars += length
+            total_bytes += byte_length
+            min_chars = length if min_chars is None else min(min_chars, length)
+            max_chars = max(max_chars, length)
+            split_name = _declared_split(row) or split_for_text(text, spec)
+            split_counts[split_name] += 1
+            row_hash = stable_row_hash(text, seed=0)
+            if row_hash in seen_hashes:
+                duplicates += 1
+            else:
+                seen_hashes.add(row_hash)
 
     warnings: list[str] = []
     if nonempty == 0:
@@ -416,6 +501,10 @@ def audit_language_csv(
         warnings.append("duplicate rows detected; consider deduplicating before larger training")
     if text_column is None and text_col == header[0] and text_col.lower() not in {*_TEXT_COLUMNS, *_PROMPT_COLUMNS}:
         warnings.append("text column was inferred from first CSV column; pass --text-column for reproducibility")
+    if _has_chat_columns(header):
+        warnings.append("chat CSV schema detected; system/user/assistant rows are being combined for training")
+    if _first_present(header, _SPLIT_COLUMNS) is not None:
+        warnings.append("declared split column detected; train/val/test counts use CSV split labels before hash fallback")
 
     return CSVCorpusAudit(
         path=str(csv_path),
@@ -722,6 +811,7 @@ def run_csv_language_probe(
                         "csv_path": str(path),
                         "text_column": audit.text_column,
                         "target_column": audit.target_column,
+                        "schema": "chat" if _has_chat_columns(audit.header) else "single_or_pair",
                         "steps": steps,
                         "batch_size": batch_size,
                         "seq_len": safe_seq_len,
@@ -758,6 +848,7 @@ def run_csv_language_probe(
                 "csv_path": str(path),
                 "text_column": audit.text_column,
                 "target_column": audit.target_column,
+                "schema": "chat" if _has_chat_columns(audit.header) else "single_or_pair",
                 "steps": steps,
                 "batch_size": batch_size,
                 "seq_len": safe_seq_len,

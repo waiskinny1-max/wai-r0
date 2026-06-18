@@ -1,6 +1,14 @@
 README.md
-docs/V0_4_3_CHANGELOG.md
+docs/CHAT_CSV_SCHEMA.md
+docs/CSV_LANGUAGE_TRAINING.md
+docs/TKINTER_WORKBENCH.md
+docs/V0_4_4_CHANGELOG.md
 main.py
+pyproject.toml
+src/wai_r0/__init__.py
 src/wai_r0/gui.py
+src/wai_r0/training/language_csv.py
 tests/test_v041_gui.py
+tests/test_v04_csv_training.py
+training/README.md
 PATCH_FILES.txt

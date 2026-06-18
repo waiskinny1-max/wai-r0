@@ -229,3 +229,35 @@ def test_cli_audit_csv_and_sample_checkpoint(tmp_path: Path) -> None:
     ]) == 0
     assert ckpt.exists()
     assert main(["sample-csv", "--checkpoint", str(ckpt), "--prompt", "A", "--max-new-tokens", "2"]) == 0
+
+
+def test_chat_csv_auto_detects_user_assistant_and_system(tmp_path: Path) -> None:
+    from wai_r0.training.language_csv import audit_language_csv
+
+    csv_path = tmp_path / "chat.csv"
+    csv_path.write_text(
+        "id,split,system,user,assistant\n"
+        "1,train,Be concise,hello,Hello. What do you need help with?\n"
+        "2,val,Be concise,define benchmark,A benchmark is a test used to compare performance.\n"
+        "3,test,Be concise,yo can you help me,Yes. Send the task.\n",
+        encoding="utf-8",
+    )
+    rows = list(iter_language_texts(csv_path, max_rows=3))
+    assert rows[0].startswith("SYSTEM:\nBe concise")
+    assert "USER:\nhello" in rows[0]
+    assert "ASSISTANT:\nHello. What do you need help with?" in rows[0]
+    audit = audit_language_csv(csv_path, max_rows=3)
+    assert audit.text_column == "user"
+    assert audit.target_column == "assistant"
+    assert audit.split_counts == {"train": 1, "val": 1, "test": 1}
+
+
+def test_chat_csv_recovers_from_old_text_column_default(tmp_path: Path) -> None:
+    csv_path = tmp_path / "chat.csv"
+    csv_path.write_text(
+        "id,split,system,user,assistant\n"
+        "1,train,Be useful,hello,Hello.\n",
+        encoding="utf-8",
+    )
+    rows = list(iter_language_texts(csv_path, text_column="text", max_rows=1))
+    assert rows and "USER:\nhello" in rows[0]

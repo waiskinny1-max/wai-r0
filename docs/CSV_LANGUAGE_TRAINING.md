@@ -6,6 +6,28 @@ This is not full language pretraining. It is a controlled tiny-training harness 
 
 > Can this WAI-R0 architecture reduce held-out byte-level next-token loss on the CSV, and can it beat trivial byte baselines?
 
+
+## Instruction/chat CSVs
+
+For datasets shaped like:
+
+```csv
+id,split,task_family,difficulty,system,user,assistant,answer_format,eval_type,metadata_json
+```
+
+leave `--text-column` and `--target-column` unset. WAI-R0 will auto-detect `user` and `assistant`, include `system` when present, and respect the declared `split` column.
+
+```bash
+python main.py audit-csv --csv training/synthetic_conversation_reasoning_500k.csv --max-rows 500000
+python main.py train-csv --csv training/synthetic_conversation_reasoning_500k.csv --steps 500 --batch-size 8 --seq-len 128 --stream
+```
+
+Use explicit columns only if auto-detection is wrong:
+
+```bash
+python main.py train-csv --csv training/synthetic_conversation_reasoning_500k.csv --text-column user --target-column assistant
+```
+
 ## Supported CSV shapes
 
 Single-text CSV:

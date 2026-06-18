@@ -4,7 +4,7 @@ WAI-R0 is a zero-training reasoning architecture lab.
 
 It does **not** claim random neural networks can reason. It tests whether a reasoning-oriented architecture has measurable structure worth training: stable signal propagation, memory behavior, recurrent latent refinement, MoE routing health, symbolic search compatibility, verifier integration, and tiny-training sample efficiency.
 
-Status: `v0.4.1 local CSV language-readiness prototype`.
+Status: `v0.4.4 local CSV/chat language-readiness prototype`.
 
 ## What is implemented
 
@@ -60,6 +60,16 @@ Use larger tiny-training budgets only after the smoke path works on your hardwar
 | `mixed architecture diagnostic` | Ablation report combining diagnostics; still not proof of reasoning. |
 
 
+
+
+## v0.4.4 chat CSV support
+
+WAI-R0 now auto-detects instruction CSVs with `system`, `user`, `assistant`, and optional `split` columns. For the 500k synthetic conversation CSV, leave the GUI `Text column` and `Target column` fields blank. The trainer converts each row into a stable `SYSTEM / USER / ASSISTANT` byte-level training sample and respects declared `train`, `val`, and `test` splits.
+
+```bash
+python main.py audit-csv --csv training/synthetic_conversation_reasoning_500k.csv --max-rows 500000
+python main.py train-csv --csv training/synthetic_conversation_reasoning_500k.csv --steps 500 --batch-size 8 --seq-len 128 --stream
+```
 
 ## v0.4.1 GUI update
 
@@ -140,18 +150,3 @@ src/wai_r0/
 ## Current recommendation
 
 v0.3 is good enough for local architecture iteration and honest diagnostic reports. It is **not** enough to justify serious pretraining. The next experiment should add broader algorithmic probes, longer-context profiler runs, baseline-vs-candidate plots, and stricter per-component keep/kill thresholds.
-
-## Troubleshooting
-
-### `ModuleNotFoundError: No module named 'wai_r0'`
-
-Use `python main.py` from the repository root. The wrapper now bootstraps the local `src/` layout automatically, so an editable install is no longer required before first launch.
-
-For package-style commands, either install the project or set `PYTHONPATH=src`:
-
-```bash
-pip install -e .[dev]
-# or
-PYTHONPATH=src python -m wai_r0 --help
-```
-
