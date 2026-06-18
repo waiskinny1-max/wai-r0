@@ -127,3 +127,27 @@ def test_gui_can_fall_back_when_tk_root_fails(monkeypatch, capsys) -> None:
     out = capsys.readouterr().out
     assert "GUI unavailable" in out
     assert "audit-csv" in out
+
+
+def test_main_py_bootstraps_src_layout_without_pythonpath() -> None:
+    """Direct source-tree execution must not require editable install first."""
+
+    import os
+    import subprocess
+
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    result = subprocess.run(
+        [sys.executable, "main.py", "--help"],
+        cwd=repo_root,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=20,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "usage:" in result.stdout
+    assert "train-csv" in result.stdout

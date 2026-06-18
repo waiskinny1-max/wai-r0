@@ -1,6 +1,6 @@
 README.md
-docs/V0_4_2_CHANGELOG.md
-pyproject.toml
+docs/V0_4_3_CHANGELOG.md
+main.py
 src/wai_r0/gui.py
 tests/test_v041_gui.py
 PATCH_FILES.txt
