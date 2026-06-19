@@ -72,3 +72,22 @@ def test_gui_default_csv_command_uses_auto_column_detection(tmp_path: Path) -> N
     cmd = build_train_csv_command(CSVTrainGuiOptions(csv_path="training/chat.csv"), cwd=tmp_path)
     assert "--text-column" not in cmd
     assert "--target-column" not in cmd
+
+
+def test_terminal_workbench_prints_commands(capsys) -> None:
+    from wai_r0.gui import launch_terminal_workbench
+
+    launch_terminal_workbench("no display")
+    out = capsys.readouterr().out
+    assert "Tkinter workbench unavailable" in out
+    assert "python main.py doctor" in out
+    assert "train-csv" in out
+
+
+def test_doctor_command_runs_without_csv(capsys) -> None:
+    from wai_r0.cli import main
+
+    assert main(["doctor", "--json"]) == 0
+    out = capsys.readouterr().out
+    assert '"checks"' in out
+    assert '"src layout"' in out

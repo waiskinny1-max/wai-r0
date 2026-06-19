@@ -1,11 +1,10 @@
 README.md
+docs/CHAT_CSV_SCHEMA.md
 docs/CSV_LANGUAGE_TRAINING.md
-docs/V0_4_5_CHANGELOG.md
+docs/V0_4_6_CHANGELOG.md
 src/wai_r0/cli.py
 src/wai_r0/gui.py
 src/wai_r0/training/language_csv.py
-src/wai_r0/training/markdown_plan.py
+tests/test_v041_gui.py
 tests/test_v04_csv_training.py
-pyproject.toml
-src/wai_r0/__init__.py
 PATCH_FILES.txt

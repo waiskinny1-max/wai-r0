@@ -334,3 +334,20 @@ def test_sample_checkpoint_falls_back_from_best_name(tmp_path: Path) -> None:
     # The sampler should fall back to the final checkpoint instead of crashing.
     output = generate_from_csv_checkpoint(tmp_path / "probe.best.pt", prompt="A", max_new_tokens=2)
     assert isinstance(output, str)
+
+
+def test_audit_tolerates_single_text_rows_with_unquoted_commas(tmp_path: Path) -> None:
+    from wai_r0.training.language_csv import audit_language_csv, iter_language_texts
+
+    csv_path = tmp_path / "commas.csv"
+    csv_path.write_text(
+        "text\n"
+        "A noun can name a person, place, thing, or idea.\n"
+        "Question words include who, what, when, where, why, and how.\n",
+        encoding="utf-8",
+    )
+    rows = list(iter_language_texts(csv_path, max_rows=2))
+    assert "person, place, thing" in rows[0]
+    audit = audit_language_csv(csv_path, max_rows=2)
+    assert audit.nonempty_rows == 2
+    assert audit.schema == "single_or_pair"

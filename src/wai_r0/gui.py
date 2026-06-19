@@ -155,6 +155,19 @@ def parse_training_event(line: str) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+
+def launch_terminal_workbench(reason: str | None = None) -> None:
+    """Fallback for headless shells where Tkinter cannot create a window."""
+
+    if reason:
+        print(f"[gui] Tkinter workbench unavailable: {reason}")
+    print("WAI-R0 terminal workbench")
+    print("Run one of these commands from the repo root:")
+    print("  python main.py doctor")
+    print("  python main.py audit-csv --csv training/basic_lang_500k.csv --max-rows 500000 --output reports/chat_csv_audit.json")
+    print("  python main.py train-csv --csv training/basic_lang_500k.csv --steps 500 --batch-size 8 --seq-len 128 --stream")
+    print("  python main.py sample-csv --checkpoint reports/csv_probe.pt --prompt 'USER:\\nhello\\n\\nASSISTANT:\\n' --stream")
+
 def launch_gui() -> None:
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
@@ -321,13 +334,17 @@ def launch_gui() -> None:
             self._row(tab, "Config", self.config_path, 1, "config")
             self._row(tab, "Text column (blank=auto)", self.text_column, 2)
             self._row(tab, "Target column (blank=auto)", self.target_column, 3)
-            self._row(tab, "Max rows", self.max_rows, 4)
-            self._row(tab, "Checkpoint", self.checkpoint, 5, "checkpoint")
-            self._row(tab, "JSONL log", self.train_log, 6)
-            self._row(tab, "Report stem", self.train_output, 7)
+            ttk.Label(
+                tab,
+                text="Schema: auto-detect chat CSV · Split mode: hash split by default",
+            ).grid(row=4, column=1, columnspan=2, sticky="w", pady=(2, 6), padx=(8, 0))
+            self._row(tab, "Max rows", self.max_rows, 5)
+            self._row(tab, "Checkpoint", self.checkpoint, 6, "checkpoint")
+            self._row(tab, "JSONL log", self.train_log, 7)
+            self._row(tab, "Report stem", self.train_output, 8)
 
             numeric = ttk.LabelFrame(tab, text="Training budget", padding=8)
-            numeric.grid(row=8, column=0, columnspan=3, sticky="ew", pady=8)
+            numeric.grid(row=9, column=0, columnspan=3, sticky="ew", pady=8)
             for i in range(6):
                 numeric.columnconfigure(i, weight=1)
             fields = [
@@ -345,12 +362,12 @@ def launch_gui() -> None:
             ttk.Entry(numeric, textvariable=self.lr, width=10).grid(row=3, column=0, sticky="ew", padx=2)
 
             self.progress = ttk.Progressbar(tab, maximum=500)
-            self.progress.grid(row=9, column=0, columnspan=3, sticky="ew", pady=(8, 2))
+            self.progress.grid(row=10, column=0, columnspan=3, sticky="ew", pady=(8, 2))
             self.progress_label = tk.StringVar(value="no run yet")
-            ttk.Label(tab, textvariable=self.progress_label).grid(row=10, column=0, columnspan=3, sticky="w")
+            ttk.Label(tab, textvariable=self.progress_label).grid(row=11, column=0, columnspan=3, sticky="w")
 
             actions = ttk.Frame(tab)
-            actions.grid(row=11, column=0, columnspan=3, sticky="ew", pady=8)
+            actions.grid(row=12, column=0, columnspan=3, sticky="ew", pady=8)
             ttk.Button(actions, text="Audit CSV", command=self.run_audit).pack(side="left")
             ttk.Button(actions, text="Start training", command=self.run_training).pack(side="left", padx=8)
             ttk.Button(actions, text="Open GUI from CLI", command=lambda: self.run_command([*command_entrypoint(), "gui"], "gui")).pack(side="left")
@@ -513,7 +530,12 @@ def launch_gui() -> None:
                 pass
             self.root.after(80, self._drain)
 
-    root = tk.Tk()
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        launch_terminal_workbench(str(exc))
+        return
+
     try:
         ttk.Style().theme_use("clam")
     except tk.TclError:

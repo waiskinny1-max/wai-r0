@@ -4,7 +4,7 @@ WAI-R0 is a zero-training reasoning architecture lab.
 
 It does **not** claim random neural networks can reason. It tests whether a reasoning-oriented architecture has measurable structure worth training: stable signal propagation, memory behavior, recurrent latent refinement, MoE routing health, symbolic search compatibility, verifier integration, and tiny-training sample efficiency.
 
-Status: `v0.4.5 local CSV/chat language-readiness prototype`.
+Status: `v0.4.6 hygiene-checked CSV/chat language-readiness prototype`.
 
 ## What is implemented
 
@@ -64,12 +64,22 @@ Use larger tiny-training budgets only after the smoke path works on your hardwar
 
 ## v0.4.5 chat CSV support
 
-WAI-R0 now auto-detects instruction CSVs with `system`, `user`, `assistant`, and optional `split` columns. For the 500k synthetic conversation CSV, leave the GUI `Text column` and `Target column` fields blank. The trainer converts each row into a stable `SYSTEM / USER / ASSISTANT` byte-level training sample and respects declared `train`, `val`, and `test` splits.
+WAI-R0 auto-detects instruction CSVs with `system`, `user`, `assistant`, and optional `split` columns. For the 500k synthetic conversation CSV, leave the GUI `Text column` and `Target column` fields blank. The trainer converts each row into a stable `SYSTEM / USER / ASSISTANT` byte-level training sample. By default, CSV training uses deterministic hash splits even when a `split` column exists; pass `--respect-csv-split` only when the file actually contains usable validation/test rows.
 
 ```bash
 python main.py audit-csv --csv training/synthetic_conversation_reasoning_500k.csv --max-rows 500000
 python main.py train-csv --csv training/synthetic_conversation_reasoning_500k.csv --steps 500 --batch-size 8 --seq-len 128 --stream
 ```
+
+## v0.4.6 hygiene/trust patch
+
+This patch does not add model capability. It hardens the repo before v0.5:
+
+- `python main.py` falls back to a terminal workbench instead of crashing in headless shells.
+- `python main.py doctor` checks source layout, Torch/CUDA, Tkinter, config files, CSV schema, and checkpoint paths.
+- The GUI labels the default schema/split behavior so the training panel is harder to misread.
+- README/docs now state the safer default: hash split unless `--respect-csv-split` is explicitly passed.
+
 
 ## v0.4.1 GUI update
 

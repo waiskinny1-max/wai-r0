@@ -15,7 +15,7 @@ For datasets shaped like:
 id,split,task_family,difficulty,system,user,assistant,answer_format,eval_type,metadata_json
 ```
 
-leave `--text-column` and `--target-column` unset. WAI-R0 will auto-detect `user` and `assistant`, include `system` when present, and respect the declared `split` column.
+leave `--text-column` and `--target-column` unset. WAI-R0 will auto-detect `user` and `assistant`, include `system` when present, and use a deterministic hash split by default. Use `--respect-csv-split` only when the declared split column has real validation/test rows.
 
 ```bash
 python main.py audit-csv --csv training/synthetic_conversation_reasoning_500k.csv --max-rows 500000
@@ -183,3 +183,7 @@ By default WAI-R0 now uses a deterministic hash split for CSV language probes, e
 Use `--respect-csv-split` only when the CSV actually contains validation/test rows. If validation is empty, training refuses to continue unless `--allow-train-eval-fallback` is passed explicitly for a smoke test.
 
 The sampler now defaults to `reports/csv_probe.pt`. If you ask for a missing `*.best.pt` file, it will try the matching final checkpoint and print a clearer error if no checkpoint exists.
+
+## v0.4.6 doctor and GUI safety
+
+Run `python main.py doctor --csv path/to/data.csv` before long training runs. The doctor command checks the repo source layout, Torch/CUDA availability, Tkinter/display readiness, CSV auto-detection, and checkpoint path. In headless shells, `python main.py` falls back to terminal instructions instead of crashing.

@@ -235,9 +235,20 @@ def _schema_name(header: list[str]) -> str:
     return "chat" if _has_chat_columns(header) else "single_or_pair"
 
 
+def _row_keys(row: dict[str, str]) -> list[str]:
+    """Return only valid string column names from csv.DictReader rows.
+
+    ``csv.DictReader`` uses ``None`` as a key when a malformed row has more
+    fields than the header. Training code should tolerate that case instead of
+    crashing during audit.
+    """
+
+    return [key for key in row if isinstance(key, str)]
+
+
 def _declared_split(row: dict[str, str]) -> str | None:
     for column in _SPLIT_COLUMNS:
-        for actual in row:
+        for actual in _row_keys(row):
             if actual.lower() == column:
                 raw = str(row.get(actual, "") or "").strip().lower()
                 if raw in {"train", "training"}:
@@ -304,7 +315,7 @@ def detect_language_columns(
 
 def _first_row_value(row: dict[str, str], candidates: tuple[str, ...]) -> str:
     for candidate in candidates:
-        for actual in row:
+        for actual in _row_keys(row):
             if actual.lower() == candidate:
                 value = str(row.get(actual, "") or "").strip()
                 if value:
@@ -314,6 +325,14 @@ def _first_row_value(row: dict[str, str], candidates: tuple[str, ...]) -> str:
 
 def _row_text(row: dict[str, str], text_column: str, target_column: str | None) -> str:
     text = str(row.get(text_column, "") or "").strip()
+    overflow = row.get(None)
+    if target_column is None and isinstance(overflow, list) and overflow:
+        # Gracefully handle simple one-column sample CSV rows that contain
+        # unquoted commas. Real multi-column training CSVs should still be
+        # properly quoted.
+        extras = [str(part).strip() for part in overflow if str(part).strip()]
+        if extras:
+            text = ", ".join([text, *extras]) if text else ", ".join(extras)
     target = str(row.get(target_column, "") or "").strip() if target_column is not None else ""
 
     # Instruction/chat dataset support. This is intentionally plain text so the

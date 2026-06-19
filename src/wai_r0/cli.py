@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import platform
 import sys
 
 from wai_r0.benchmarks import ablate, architecture_priors, memory, symbolic, tiny_train, zero_neural
@@ -225,6 +226,88 @@ def _cmd_sample_csv(args: argparse.Namespace) -> None:
         print(text)
 
 
+
+def _doctor_check(name: str, ok: bool, detail: str = "") -> dict[str, str]:
+    return {"name": name, "status": "ok" if ok else "warn", "detail": detail}
+
+
+def _cmd_doctor(args: argparse.Namespace) -> None:
+    """Print a compact local environment and repo-health report."""
+
+    checks: list[dict[str, str]] = []
+    checks.append(_doctor_check("python", True, platform.python_version()))
+
+    src_dir = Path("src/wai_r0")
+    checks.append(_doctor_check("src layout", src_dir.exists(), str(src_dir)))
+
+    config_path = Path(args.config)
+    checks.append(_doctor_check("model config", config_path.exists(), str(config_path)))
+
+    training_dir = Path("training")
+    checks.append(_doctor_check("training dir", training_dir.exists(), str(training_dir)))
+
+    reports_dir = Path("reports")
+    checks.append(_doctor_check("reports dir", reports_dir.exists(), str(reports_dir)))
+
+    try:
+        import torch
+
+        cuda = torch.cuda.is_available()
+        detail = f"torch {getattr(torch, '__version__', 'unknown')}"
+        if cuda:
+            try:
+                detail += f"; cuda device={torch.cuda.get_device_name(0)}"
+            except Exception:
+                detail += "; cuda available"
+        else:
+            detail += "; cuda unavailable"
+        checks.append(_doctor_check("torch", True, detail))
+    except Exception as exc:
+        checks.append(_doctor_check("torch", False, str(exc)))
+
+    try:
+        import tkinter as tk
+
+        display_hint = "DISPLAY set" if sys.platform.startswith("win") or bool(__import__("os").environ.get("DISPLAY")) else "no DISPLAY"
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            root.destroy()
+            checks.append(_doctor_check("tkinter", True, f"window create ok; {display_hint}"))
+        except tk.TclError as exc:
+            checks.append(_doctor_check("tkinter", False, f"import ok, window unavailable: {exc}; {display_hint}"))
+    except Exception as exc:
+        checks.append(_doctor_check("tkinter", False, str(exc)))
+
+    if args.csv:
+        try:
+            inspection = inspect_language_csv(args.csv, text_column=args.text_column, target_column=args.target_column, sample_rows=args.sample_rows)
+            schema = "chat" if {"user", "assistant"}.issubset({column.lower() for column in inspection.header}) else "single_or_pair"
+            checks.append(
+                _doctor_check(
+                    "csv inspect",
+                    inspection.exists and inspection.nonempty_rows > 0,
+                    f"schema={schema}; text={inspection.detected_text_column}; target={inspection.detected_target_column}; rows={inspection.nonempty_rows}",
+                )
+            )
+        except Exception as exc:
+            checks.append(_doctor_check("csv inspect", False, str(exc)))
+    else:
+        checks.append(_doctor_check("csv inspect", True, "skipped; pass --csv to inspect a dataset"))
+
+    checkpoint = Path(args.checkpoint)
+    checks.append(_doctor_check("checkpoint", checkpoint.exists(), str(checkpoint)))
+
+    if args.json:
+        print(json.dumps({"checks": checks}, indent=2, sort_keys=True))
+        return
+
+    print("WAI-R0 doctor")
+    for check in checks:
+        marker = "OK" if check["status"] == "ok" else "WARN"
+        detail = f" — {check['detail']}" if check.get("detail") else ""
+        print(f"[{marker}] {check['name']}{detail}")
+
 def add_csv_training_args(parser: argparse.ArgumentParser, *, include_csv_path: bool) -> None:
     if include_csv_path:
         parser.add_argument("--csv", required=True, help="CSV path, for example training/basic_lang.csv")
@@ -362,6 +445,15 @@ def main(argv: list[str] | None = None) -> int:
     suite.add_argument("--config", default="configs/model/nano.yaml")
     suite.add_argument("--suite", default="configs/benchmark/suite.yaml")
 
+    doctor = sub.add_parser("doctor", help="check local repo, GUI, torch, CSV, and checkpoint readiness")
+    doctor.add_argument("--config", default="configs/model/nano.yaml")
+    doctor.add_argument("--csv")
+    doctor.add_argument("--text-column")
+    doctor.add_argument("--target-column")
+    doctor.add_argument("--sample-rows", type=int, default=1000)
+    doctor.add_argument("--checkpoint", default="reports/csv_probe.pt")
+    doctor.add_argument("--json", action="store_true")
+
     sub.add_parser("gui", help="open the Tkinter local training and checkpoint console")
 
     rep = sub.add_parser("report")
@@ -403,6 +495,8 @@ def main(argv: list[str] | None = None) -> int:
         print(guard.summary(findings))
     elif args.cmd == "suite":
         _cmd_suite(args)
+    elif args.cmd == "doctor":
+        _cmd_doctor(args)
     elif args.cmd == "gui":
         from wai_r0.gui import launch_gui
 
