@@ -132,6 +132,7 @@ def _cmd_audit_csv(args: argparse.Namespace) -> None:
         target_column=args.target_column,
         max_rows=args.max_rows,
         split_spec=CSVSplitSpec(args.train_fraction, args.val_fraction, args.test_fraction, args.split_seed),
+        use_declared_split=args.respect_csv_split,
     )
     _write_json_payload(audit.to_dict(), args.output)
 
@@ -172,6 +173,8 @@ def _csv_report_from_args(args: argparse.Namespace, csv_path: str | Path | None 
         test_fraction=args.test_fraction,
         split_seed=args.split_seed,
         baseline_rows=args.baseline_rows,
+        use_declared_split=args.respect_csv_split,
+        allow_train_eval_fallback=args.allow_train_eval_fallback,
         progress_callback=_stream_training_step if getattr(args, "stream", False) else None,
     )
 
@@ -240,6 +243,12 @@ def add_csv_training_args(parser: argparse.ArgumentParser, *, include_csv_path: 
     parser.add_argument("--val-fraction", type=float, default=0.05)
     parser.add_argument("--test-fraction", type=float, default=0.05)
     parser.add_argument("--split-seed", type=int, default=1337)
+    parser.add_argument("--respect-csv-split", action="store_true", help="use declared split column instead of default hash split")
+    parser.add_argument(
+        "--allow-train-eval-fallback",
+        action="store_true",
+        help="allow validation to fall back to train rows; use only for smoke tests",
+    )
     parser.add_argument("--checkpoint")
     parser.add_argument("--resume-from")
     parser.add_argument("--log")
@@ -317,6 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     audit_csv.add_argument("--val-fraction", type=float, default=0.05)
     audit_csv.add_argument("--test-fraction", type=float, default=0.05)
     audit_csv.add_argument("--split-seed", type=int, default=1337)
+    audit_csv.add_argument("--respect-csv-split", action="store_true", help="use declared split column instead of hash split")
     audit_csv.add_argument("--output")
 
     train_csv = sub.add_parser("train-csv", help="run a held-out byte-level CSV language-readiness experiment")

@@ -78,6 +78,8 @@ class CSVCorpusAudit:
     header: list[str]
     text_column: str
     target_column: str | None
+    schema: str
+    split_mode: str
     max_rows: int | None
     rows_seen: int
     nonempty_rows: int
@@ -124,6 +126,8 @@ class CSVLanguageProbeResult:
     csv_path: str
     text_column: str
     target_column: str | None
+    schema: str
+    split_mode: str
     steps: int
     batch_size: int
     seq_len: int
@@ -225,6 +229,10 @@ def _first_present(header: list[str], candidates: tuple[str, ...]) -> str | None
 
 def _has_chat_columns(header: list[str]) -> bool:
     return _first_present(header, _USER_COLUMNS) is not None and _first_present(header, _ASSISTANT_COLUMNS) is not None
+
+
+def _schema_name(header: list[str]) -> str:
+    return "chat" if _has_chat_columns(header) else "single_or_pair"
 
 
 def _declared_split(row: dict[str, str]) -> str | None:
@@ -360,6 +368,7 @@ def iter_language_examples(
     max_rows: int | None = None,
     split: SplitName = "all",
     split_spec: CSVSplitSpec | None = None,
+    use_declared_split: bool = False,
 ) -> Iterator[str]:
     csv_path = Path(path)
     if not csv_path.exists():
@@ -386,9 +395,12 @@ def iter_language_examples(
                 continue
             count += 1
             if split != "all":
-                declared = _declared_split(row)
-                if declared is not None:
-                    if declared != split:
+                if use_declared_split:
+                    declared = _declared_split(row)
+                    if declared is not None:
+                        if declared != split:
+                            continue
+                    elif split_for_text(text, spec) != split:
                         continue
                 elif split_for_text(text, spec) != split:
                     continue
@@ -445,6 +457,7 @@ def audit_language_csv(
     target_column: str | None = None,
     max_rows: int | None = None,
     split_spec: CSVSplitSpec | None = None,
+    use_declared_split: bool = False,
 ) -> CSVCorpusAudit:
     csv_path = Path(path)
     if not csv_path.exists():
@@ -455,6 +468,8 @@ def audit_language_csv(
     spec.validate()
     header = _sniff_header(csv_path)
     text_col, target_col = detect_language_columns(header, text_column, target_column)
+    schema = _schema_name(header)
+    split_mode = "declared" if use_declared_split else "hash"
 
     rows_seen = 0
     nonempty = 0
@@ -463,17 +478,20 @@ def audit_language_csv(
     min_chars: int | None = None
     max_chars = 0
     split_counts = {"train": 0, "val": 0, "test": 0}
+    declared_split_counts = {"train": 0, "val": 0, "test": 0, "unknown": 0}
     seen_hashes: set[int] = set()
     duplicates = 0
 
     with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
+        count = 0
         for row in reader:
-            if max_rows is not None and rows_seen >= max_rows:
+            if max_rows is not None and count >= max_rows:
                 break
             text = _row_text(row, text_col, target_col)
             if not text:
                 continue
+            count += 1
             rows_seen += 1
             nonempty += 1
             length = len(text)
@@ -482,8 +500,19 @@ def audit_language_csv(
             total_bytes += byte_length
             min_chars = length if min_chars is None else min(min_chars, length)
             max_chars = max(max_chars, length)
-            split_name = _declared_split(row) or split_for_text(text, spec)
+
+            declared = _declared_split(row)
+            if declared is None:
+                declared_split_counts["unknown"] += 1
+            else:
+                declared_split_counts[declared] += 1
+
+            if use_declared_split and declared is not None:
+                split_name = declared
+            else:
+                split_name = split_for_text(text, spec)
             split_counts[split_name] += 1
+
             row_hash = stable_row_hash(text, seed=0)
             if row_hash in seen_hashes:
                 duplicates += 1
@@ -494,9 +523,9 @@ def audit_language_csv(
     if nonempty == 0:
         warnings.append("no nonempty training rows found")
     if split_counts["val"] == 0:
-        warnings.append("validation split is empty under current max_rows/split; increase max_rows or val fraction")
+        warnings.append("validation split is empty under current split mode; training will refuse to use train rows as validation")
     if split_counts["test"] == 0:
-        warnings.append("test split is empty under current max_rows/split; increase max_rows or test fraction")
+        warnings.append("test split is empty under current split mode")
     if duplicates and nonempty:
         warnings.append("duplicate rows detected; consider deduplicating before larger training")
     if text_column is None and text_col == header[0] and text_col.lower() not in {*_TEXT_COLUMNS, *_PROMPT_COLUMNS}:
@@ -504,13 +533,20 @@ def audit_language_csv(
     if _has_chat_columns(header):
         warnings.append("chat CSV schema detected; system/user/assistant rows are being combined for training")
     if _first_present(header, _SPLIT_COLUMNS) is not None:
-        warnings.append("declared split column detected; train/val/test counts use CSV split labels before hash fallback")
+        if use_declared_split:
+            warnings.append("declared split column respected; validation requires val/validation/dev rows in the CSV")
+        else:
+            warnings.append("declared split column detected but hash split is being used by default to avoid train-only CSV leakage")
+        if declared_split_counts["val"] == 0 and declared_split_counts["test"] == 0:
+            warnings.append("CSV split column appears train-only in scanned rows; hash split is safer for this probe")
 
     return CSVCorpusAudit(
         path=str(csv_path),
         header=header,
         text_column=text_col,
         target_column=target_col,
+        schema=schema,
+        split_mode=split_mode,
         max_rows=max_rows,
         rows_seen=rows_seen,
         nonempty_rows=nonempty,
@@ -572,10 +608,19 @@ def _make_training_iterator(
     target_column: str | None,
     max_rows: int | None,
     split_spec: CSVSplitSpec,
+    use_declared_split: bool = False,
 ) -> Iterator[str]:
     while True:
         yielded = False
-        for text in iter_language_examples(path, text_column, target_column, max_rows=max_rows, split="train", split_spec=split_spec):
+        for text in iter_language_examples(
+            path,
+            text_column,
+            target_column,
+            max_rows=max_rows,
+            split="train",
+            split_spec=split_spec,
+            use_declared_split=use_declared_split,
+        ):
             yielded = True
             yield text
         if not yielded:
@@ -590,8 +635,22 @@ def _split_sample(
     split: SplitName,
     split_spec: CSVSplitSpec,
     limit: int,
+    use_declared_split: bool = False,
 ) -> list[str]:
-    return list(islice(iter_language_examples(path, text_column, target_column, max_rows=max_rows, split=split, split_spec=split_spec), limit))
+    return list(
+        islice(
+            iter_language_examples(
+                path,
+                text_column,
+                target_column,
+                max_rows=max_rows,
+                split=split,
+                split_spec=split_spec,
+                use_declared_split=use_declared_split,
+            ),
+            limit,
+        )
+    )
 
 
 def _encoded_targets(texts: list[str], tokenizer: ByteTokenizer, seq_len: int) -> list[int]:
@@ -704,6 +763,8 @@ def run_csv_language_probe(
     test_fraction: float = 0.05,
     split_seed: int | None = None,
     baseline_rows: int = 256,
+    use_declared_split: bool = False,
+    allow_train_eval_fallback: bool = False,
     progress_callback: Callable[[CSVTrainingStep], None] | None = None,
 ) -> CSVLanguageProbeResult:
     """Run a held-out CSV language-readiness experiment.
@@ -732,7 +793,14 @@ def run_csv_language_probe(
     path = Path(csv_path)
     split_spec = CSVSplitSpec(train_fraction, val_fraction, test_fraction, split_seed if split_seed is not None else cfg.seed)
     split_spec.validate()
-    audit = audit_language_csv(path, text_column, target_column, max_rows=max_rows, split_spec=split_spec)
+    audit = audit_language_csv(
+        path,
+        text_column,
+        target_column,
+        max_rows=max_rows,
+        split_spec=split_spec,
+        use_declared_split=use_declared_split,
+    )
     inspection = inspect_language_csv(path, audit.text_column, audit.target_column, sample_rows=min(max_rows or 1000, 1000))
     if audit.nonempty_rows == 0:
         raise ValueError("CSV has no nonempty language rows.")
@@ -749,15 +817,49 @@ def run_csv_language_probe(
     if resume_from is not None:
         resumed_step = _load_checkpoint(resume_from, core, opt)
 
-    val_sample = _split_sample(path, audit.text_column, audit.target_column, max_rows, "val", split_spec, eval_rows)
+    val_sample = _split_sample(
+        path,
+        audit.text_column,
+        audit.target_column,
+        max_rows,
+        "val",
+        split_spec,
+        eval_rows,
+        use_declared_split=use_declared_split,
+    )
     if not val_sample:
-        val_sample = _split_sample(path, audit.text_column, audit.target_column, max_rows, "train", split_spec, eval_rows)
-    train_baseline_sample = _split_sample(path, audit.text_column, audit.target_column, max_rows, "train", split_spec, baseline_rows)
+        if not allow_train_eval_fallback:
+            raise ValueError(
+                "validation split is empty; refusing to evaluate on training rows. "
+                "Use the default hash split, increase --max-rows, or pass --allow-train-eval-fallback only for smoke tests."
+            )
+        val_sample = _split_sample(
+            path,
+            audit.text_column,
+            audit.target_column,
+            max_rows,
+            "train",
+            split_spec,
+            eval_rows,
+            use_declared_split=use_declared_split,
+        )
+    train_baseline_sample = _split_sample(
+        path,
+        audit.text_column,
+        audit.target_column,
+        max_rows,
+        "train",
+        split_spec,
+        baseline_rows,
+        use_declared_split=use_declared_split,
+    )
     baseline = byte_unigram_baseline(train_baseline_sample, val_sample, tokenizer, safe_seq_len)
     uniform_baseline_loss = float(math.log(tokenizer.vocab_size))
     initial_eval_loss, initial_eval_acc = _evaluate(core, val_sample, tokenizer, safe_seq_len)
 
-    iterator = _make_training_iterator(path, audit.text_column, audit.target_column, max_rows, split_spec)
+    iterator = _make_training_iterator(
+        path, audit.text_column, audit.target_column, max_rows, split_spec, use_declared_split=use_declared_split
+    )
     final_loss = 0.0
     rows_consumed = 0
     tokens_seen = 0
@@ -778,7 +880,9 @@ def run_csv_language_probe(
     for step in range(1, steps + 1):
         batch = _next_text_batch(iterator, batch_size)
         if len(batch) < batch_size:
-            iterator = _make_training_iterator(path, audit.text_column, audit.target_column, max_rows, split_spec)
+            iterator = _make_training_iterator(
+        path, audit.text_column, audit.target_column, max_rows, split_spec, use_declared_split=use_declared_split
+    )
             batch.extend(_next_text_batch(iterator, batch_size - len(batch)))
         if not batch:
             raise ValueError("CSV train iterator produced no batch")
@@ -811,7 +915,8 @@ def run_csv_language_probe(
                         "csv_path": str(path),
                         "text_column": audit.text_column,
                         "target_column": audit.target_column,
-                        "schema": "chat" if _has_chat_columns(audit.header) else "single_or_pair",
+                        "schema": audit.schema,
+                        "split_mode": audit.split_mode,
                         "steps": steps,
                         "batch_size": batch_size,
                         "seq_len": safe_seq_len,
@@ -848,7 +953,8 @@ def run_csv_language_probe(
                 "csv_path": str(path),
                 "text_column": audit.text_column,
                 "target_column": audit.target_column,
-                "schema": "chat" if _has_chat_columns(audit.header) else "single_or_pair",
+                "schema": audit.schema,
+                "split_mode": audit.split_mode,
                 "steps": steps,
                 "batch_size": batch_size,
                 "seq_len": safe_seq_len,
@@ -881,6 +987,8 @@ def run_csv_language_probe(
         csv_path=str(path),
         text_column=audit.text_column,
         target_column=audit.target_column,
+        schema=audit.schema,
+        split_mode=audit.split_mode,
         steps=steps,
         batch_size=batch_size,
         seq_len=safe_seq_len,
@@ -946,6 +1054,8 @@ def csv_language_probe_report(
     test_fraction: float = 0.05,
     split_seed: int | None = None,
     baseline_rows: int = 256,
+    use_declared_split: bool = False,
+    allow_train_eval_fallback: bool = False,
     progress_callback: Callable[[CSVTrainingStep], None] | None = None,
 ) -> BenchmarkReport:
     """Return a standard WAI-R0 report for a CSV language-readiness run."""
@@ -970,6 +1080,8 @@ def csv_language_probe_report(
         test_fraction=test_fraction,
         split_seed=split_seed,
         baseline_rows=baseline_rows,
+        use_declared_split=use_declared_split,
+        allow_train_eval_fallback=allow_train_eval_fallback,
         progress_callback=progress_callback,
     )
     return BenchmarkReport(
@@ -1016,6 +1128,34 @@ def csv_language_probe_report(
     )
 
 
+def resolve_checkpoint_path(checkpoint_path: str | Path) -> Path:
+    """Resolve common WAI-R0 checkpoint naming mistakes with clear errors."""
+
+    path = Path(checkpoint_path)
+    if path.exists():
+        return path
+
+    candidates: list[Path] = []
+    name = path.name
+    if ".best" in name:
+        candidates.append(path.with_name(name.replace(".best", "")))
+    if "_best" in name:
+        candidates.append(path.with_name(name.replace("_best", "")))
+    if path.suffix:
+        candidates.append(path.with_name(f"{path.stem}_best{path.suffix}"))
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    nearby = sorted(path.parent.glob("*.pt")) if path.parent.exists() else []
+    nearby_text = ""
+    if nearby:
+        nearby_text = " Existing checkpoints: " + ", ".join(str(item) for item in nearby[:8])
+    raise FileNotFoundError(
+        f"checkpoint not found: {path}. Train first, or point the sampler to reports/csv_probe.pt." + nearby_text
+    )
+
+
 @torch.no_grad()
 def iter_generate_from_csv_checkpoint(
     checkpoint_path: str | Path,
@@ -1031,7 +1171,7 @@ def iter_generate_from_csv_checkpoint(
 
     if max_new_tokens <= 0:
         raise ValueError("max_new_tokens must be positive")
-    checkpoint = torch.load(Path(checkpoint_path), map_location="cpu")
+    checkpoint = torch.load(resolve_checkpoint_path(checkpoint_path), map_location="cpu")
     config_data = checkpoint.get("model_config")
     if not isinstance(config_data, dict):
         raise ValueError("checkpoint missing model_config")
@@ -1071,7 +1211,7 @@ def generate_from_csv_checkpoint(
 
     if max_new_tokens <= 0:
         raise ValueError("max_new_tokens must be positive")
-    checkpoint = torch.load(Path(checkpoint_path), map_location="cpu")
+    checkpoint = torch.load(resolve_checkpoint_path(checkpoint_path), map_location="cpu")
     config_data = checkpoint.get("model_config")
     if not isinstance(config_data, dict):
         raise ValueError("checkpoint missing model_config")

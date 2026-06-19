@@ -50,6 +50,7 @@ def test_csv_language_probe_runs_and_can_checkpoint(tmp_path: Path) -> None:
         max_rows=4,
         eval_rows=2,
         checkpoint_path=ckpt,
+        allow_train_eval_fallback=True,
     )
     assert result.rows_consumed == 2
     assert result.eval_loss > 0
@@ -72,6 +73,7 @@ batch_size: 2
 seq_len: 24
 max_rows: 4
 eval_rows: 2
+allow_train_eval_fallback: true
 output: {tmp_path / 'csv_probe'}
 ---
 """,
@@ -106,6 +108,7 @@ def test_cli_train_csv_and_inspect_csv(tmp_path: Path) -> None:
         "4",
         "--eval-rows",
         "2",
+        "--allow-train-eval-fallback",
         "--output",
         str(out),
     ]) == 0
@@ -144,6 +147,7 @@ def test_train_subcommand_accepts_csv(tmp_path) -> None:
         "1",
         "--eval-rows",
         "1",
+        "--allow-train-eval-fallback",
         "--output",
         str(output),
     ])
@@ -195,6 +199,7 @@ def test_csv_language_probe_writes_log_and_best_checkpoint(tmp_path: Path) -> No
         train_fraction=0.75,
         val_fraction=0.25,
         test_fraction=0.0,
+        allow_train_eval_fallback=True,
     )
     assert ckpt.exists()
     assert log.exists()
@@ -226,6 +231,7 @@ def test_cli_audit_csv_and_sample_checkpoint(tmp_path: Path) -> None:
         "--train-fraction", "0.75",
         "--val-fraction", "0.25",
         "--test-fraction", "0.0",
+        "--allow-train-eval-fallback",
     ]) == 0
     assert ckpt.exists()
     assert main(["sample-csv", "--checkpoint", str(ckpt), "--prompt", "A", "--max-new-tokens", "2"]) == 0
@@ -249,7 +255,12 @@ def test_chat_csv_auto_detects_user_assistant_and_system(tmp_path: Path) -> None
     audit = audit_language_csv(csv_path, max_rows=3)
     assert audit.text_column == "user"
     assert audit.target_column == "assistant"
-    assert audit.split_counts == {"train": 1, "val": 1, "test": 1}
+    assert audit.schema == "chat"
+    assert audit.split_mode == "hash"
+    assert sum(audit.split_counts.values()) == 3
+
+    declared_audit = audit_language_csv(csv_path, max_rows=3, use_declared_split=True)
+    assert declared_audit.split_counts == {"train": 1, "val": 1, "test": 1}
 
 
 def test_chat_csv_recovers_from_old_text_column_default(tmp_path: Path) -> None:
@@ -261,3 +272,65 @@ def test_chat_csv_recovers_from_old_text_column_default(tmp_path: Path) -> None:
     )
     rows = list(iter_language_texts(csv_path, text_column="text", max_rows=1))
     assert rows and "USER:\nhello" in rows[0]
+
+
+def test_declared_train_only_split_refuses_train_eval_fallback_by_default(tmp_path: Path) -> None:
+    from wai_r0.training.language_csv import run_csv_language_probe
+
+    csv_path = tmp_path / "chat_train_only.csv"
+    csv_path.write_text(
+        "id,split,system,user,assistant\n"
+        "1,train,Be useful,hello,Hello.\n"
+        "2,train,Be useful,define benchmark,A benchmark is a test.\n"
+        "3,train,Be useful,yo,Send the task.\n",
+        encoding="utf-8",
+    )
+    cfg = ReasonerConfig(max_seq_len=32, seed=123)
+    try:
+        run_csv_language_probe(
+            cfg,
+            csv_path,
+            steps=1,
+            batch_size=1,
+            seq_len=24,
+            eval_rows=1,
+            max_rows=3,
+            train_fraction=0.9,
+            val_fraction=0.1,
+            test_fraction=0.0,
+            use_declared_split=True,
+        )
+    except ValueError as exc:
+        assert "validation split is empty" in str(exc)
+    else:
+        raise AssertionError("expected declared train-only split to fail without explicit fallback")
+
+
+def test_sample_checkpoint_falls_back_from_best_name(tmp_path: Path) -> None:
+    from wai_r0.training.language_csv import generate_from_csv_checkpoint, run_csv_language_probe
+
+    csv_path = tmp_path / "basic.csv"
+    write_csv(csv_path)
+    ckpt = tmp_path / "probe.pt"
+    cfg = ReasonerConfig(max_seq_len=32, seed=1234)
+    run_csv_language_probe(
+        cfg,
+        csv_path,
+        steps=1,
+        batch_size=2,
+        seq_len=24,
+        max_rows=4,
+        eval_rows=1,
+        checkpoint_path=ckpt,
+        train_fraction=0.75,
+        val_fraction=0.25,
+        test_fraction=0.0,
+        allow_train_eval_fallback=True,
+    )
+    best = tmp_path / "probe.best.pt"
+    if best.exists():
+        best.unlink()
+    # Common GUI/user mistake: ask for the best checkpoint before it exists.
+    # The sampler should fall back to the final checkpoint instead of crashing.
+    output = generate_from_csv_checkpoint(tmp_path / "probe.best.pt", prompt="A", max_new_tokens=2)
+    assert isinstance(output, str)

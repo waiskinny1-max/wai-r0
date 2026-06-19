@@ -4,7 +4,7 @@ WAI-R0 is a zero-training reasoning architecture lab.
 
 It does **not** claim random neural networks can reason. It tests whether a reasoning-oriented architecture has measurable structure worth training: stable signal propagation, memory behavior, recurrent latent refinement, MoE routing health, symbolic search compatibility, verifier integration, and tiny-training sample efficiency.
 
-Status: `v0.4.4 local CSV/chat language-readiness prototype`.
+Status: `v0.4.5 local CSV/chat language-readiness prototype`.
 
 ## What is implemented
 
@@ -62,7 +62,7 @@ Use larger tiny-training budgets only after the smoke path works on your hardwar
 
 
 
-## v0.4.4 chat CSV support
+## v0.4.5 chat CSV support
 
 WAI-R0 now auto-detects instruction CSVs with `system`, `user`, `assistant`, and optional `split` columns. For the 500k synthetic conversation CSV, leave the GUI `Text column` and `Target column` fields blank. The trainer converts each row into a stable `SYSTEM / USER / ASSISTANT` byte-level training sample and respects declared `train`, `val`, and `test` splits.
 
@@ -79,7 +79,7 @@ CLI streaming was also added:
 
 ```bash
 wai-r0 train-csv --csv training/basic_lang_500k.csv --text-column text --stream
-wai-r0 sample-csv --checkpoint reports/csv_probe.best.pt --prompt "A noun is" --stream
+wai-r0 sample-csv --checkpoint reports/csv_probe.pt --prompt "A noun is" --stream
 ```
 
 ## v0.3 additions

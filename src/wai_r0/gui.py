@@ -357,7 +357,7 @@ def launch_gui() -> None:
 
         def _build_sample_tab(self, tab: ttk.Frame) -> None:
             tab.columnconfigure(1, weight=1)
-            self.sample_checkpoint = tk.StringVar(value="reports/csv_probe.best.pt")
+            self.sample_checkpoint = tk.StringVar(value="reports/csv_probe.pt")
             self.max_tokens = tk.IntVar(value=120)
             self._row(tab, "Checkpoint", self.sample_checkpoint, 0, "checkpoint")
             ttk.Label(tab, text="Max tokens").grid(row=1, column=0, sticky="w", pady=3)

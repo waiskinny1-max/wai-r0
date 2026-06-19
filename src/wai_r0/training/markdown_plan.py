@@ -40,6 +40,9 @@ _ALLOWED_KEYS = {
     "val_fraction",
     "test_fraction",
     "split_seed",
+    "respect_csv_split",
+    "use_declared_split",
+    "allow_train_eval_fallback",
     "checkpoint",
     "checkpoint_path",
     "resume_from",
@@ -84,6 +87,8 @@ class MarkdownTrainingPlan:
     val_fraction: float = 0.05
     test_fraction: float = 0.05
     split_seed: int | None = None
+    use_declared_split: bool = False
+    allow_train_eval_fallback: bool = False
     checkpoint_path: str | None = None
     resume_from: str | None = None
     log_path: str | None = None
@@ -253,6 +258,8 @@ def load_markdown_training_plan(path: str | Path) -> MarkdownTrainingPlan:
             val_fraction=_as_positive_float(normalized.get("val_fraction", 0.05), "val_fraction"),
             test_fraction=_as_positive_float(normalized.get("test_fraction", 0.05), "test_fraction"),
             split_seed=_as_optional_positive_int(normalized.get("split_seed"), "split_seed"),
+            use_declared_split=bool(normalized.get("respect_csv_split", normalized.get("use_declared_split", False))),
+            allow_train_eval_fallback=bool(normalized.get("allow_train_eval_fallback", False)),
             checkpoint_path=_optional_str(normalized.get("checkpoint_path") or normalized.get("checkpoint")),
             resume_from=_optional_str(normalized.get("resume_from")),
             log_path=_optional_str(normalized.get("log_path") or normalized.get("log")),
@@ -300,6 +307,8 @@ def run_markdown_training_plan(path: str | Path) -> tuple[BenchmarkReport, Markd
             test_fraction=plan.test_fraction,
             split_seed=plan.split_seed,
             baseline_rows=plan.baseline_rows,
+            use_declared_split=plan.use_declared_split,
+            allow_train_eval_fallback=plan.allow_train_eval_fallback,
         )
         report.name = "train_md_csv"
         report.benchmark_config = {

@@ -131,7 +131,7 @@ Outputs:
 reports/csv_language_readiness.json
 reports/csv_language_readiness.md
 reports/csv_probe.pt
-reports/csv_probe.best.pt
+reports/csv_probe.pt
 reports/csv_probe_train.jsonl
 ```
 
@@ -175,3 +175,11 @@ Use the recommendation field:
 - Duplicate templates can still leak structure across splits.
 - Lower loss does not prove semantic understanding.
 - No factuality, safety, instruction-following, or general reasoning evaluation is included yet.
+
+## v0.4.5 split safety
+
+By default WAI-R0 now uses a deterministic hash split for CSV language probes, even when a `split` column exists. This prevents train-only CSVs from silently evaluating on training rows and producing fake-perfect results.
+
+Use `--respect-csv-split` only when the CSV actually contains validation/test rows. If validation is empty, training refuses to continue unless `--allow-train-eval-fallback` is passed explicitly for a smoke test.
+
+The sampler now defaults to `reports/csv_probe.pt`. If you ask for a missing `*.best.pt` file, it will try the matching final checkpoint and print a clearer error if no checkpoint exists.
