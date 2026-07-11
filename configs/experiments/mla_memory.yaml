@@ -1,0 +1,40 @@
+id: mla-memory-001
+kind: profile
+hypothesis: MLA-lite reduces measured KV-cache allocation without violating cached-logit equivalence.
+candidate: mla_lite
+control: gqa
+matching_rule: token_matched
+evidence_class: systems_performance
+datasets:
+  - deterministic-random-token-stream-v1
+seeds: [1337, 2026, 4096]
+primary_metric: kv_cache_reduction
+thresholds:
+  keep: 0.30
+  kill: 0.05
+  higher_is_better: true
+secondary_metrics:
+  - decode_latency_improvement
+  - prefill_latency_improvement
+failure_metrics:
+  - cached_logit_mismatch
+  - non_finite_logits
+maximum_budget:
+  wall_clock_seconds: 3600
+known_confounds:
+  - Tiny-model cache and latency behavior may not transfer to large models.
+  - MLA-lite reconstructs keys and values during decode, trading compute for payload memory.
+  - CPU timing is noisy; final performance conclusions require the target GPU.
+robustness_axes: []
+minimum_successful_seeds: 3
+tie_tolerance: 0.000001
+final_evaluation: false
+execution:
+  cpu_threads: 1
+  candidate_config: ../model/nano_mla.yaml
+  control_config: ../model/nano_gqa.yaml
+  batch_size: 1
+  sequence_length: 32
+  warmup_runs: 1
+  measured_runs: 3
+  cache_equivalence_tolerance: 0.0001

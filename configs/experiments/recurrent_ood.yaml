@@ -1,0 +1,51 @@
+id: recurrent-reverse-ood-001
+kind: algorithmic
+hypothesis: Four fixed latent-refinement steps improve held-out-length reverse accuracy over the same parameterized model used in fast mode.
+candidate: recurrent_steps_4
+control: recurrent_steps_0
+matching_rule: parameter_matched
+evidence_class: learned_algorithmic
+datasets:
+  - reverse
+seeds: [1337, 2026, 4096]
+primary_metric: ood_token_accuracy
+thresholds:
+  keep: 0.05
+  kill: -0.02
+  higher_is_better: true
+secondary_metrics:
+  - ood_exact_match
+  - id_token_accuracy
+  - negative_final_loss
+failure_metrics:
+  - non_finite_loss
+  - parameter_mismatch
+maximum_budget:
+  wall_clock_seconds: 1800
+  optimizer_steps_per_variant: 40
+known_confounds:
+  - This is a tiny generated task and does not establish language-model scale transfer.
+  - Fixed recurrent steps add active compute; this manifest is parameter matched, not FLOP matched.
+  - Reverse-task generator structure can reward task-specific inductive biases.
+robustness_axes: []
+minimum_successful_seeds: 3
+tie_tolerance: 0.000001
+final_evaluation: false
+execution:
+  cpu_threads: 1
+  candidate_config: ../model/nano_recurrent.yaml
+  control_config: ../model/nano_recurrent.yaml
+  task: reverse
+  train_lengths: [4, 6]
+  id_length: 6
+  ood_length: 12
+  batch_size: 8
+  train_steps: 40
+  eval_batches: 8
+  learning_rate: 0.001
+  weight_decay: 0.01
+  schedule: cosine
+  warmup_steps: 4
+  candidate_model_mode: think
+  candidate_recurrent_steps: 4
+  control_model_mode: fast

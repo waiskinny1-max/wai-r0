@@ -1,33 +1,112 @@
 [build-system]
-requires=["setuptools>=69","wheel"]
-build-backend="setuptools.build_meta"
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
-name="wai-r0"
-version="0.4.5"
-description="A zero-training reasoning architecture lab for deciding what is worth training."
-readme="README.md"
-requires-python=">=3.10"
-dependencies=["torch>=2.2","PyYAML>=6.0"]
+name = "wai-r0"
+dynamic = ["version"]
+description = "An evidence-first, local architecture research platform for controlled model experiments."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{name = "WAI-R0 contributors"}]
+keywords = ["machine-learning", "transformer", "evaluation", "reproducibility", "research"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
+]
+dependencies = [
+  "torch>=2.2",
+  "PyYAML>=6.0",
+]
 
 [project.optional-dependencies]
-dev=["pytest>=8.0","ruff>=0.5.0"]
+dev = [
+  "build>=1.2",
+  "mypy>=1.10",
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.5.0",
+]
 
 [project.scripts]
-wai-r0="wai_r0.cli:main"
+wai-r0 = "wai_r0.v05_cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
 
 [tool.setuptools.packages.find]
-where=["src"]
+where = ["src"]
+
+[tool.setuptools.package-data]
+wai_r0 = ["py.typed"]
+
+[tool.setuptools.dynamic]
+version = {attr = "wai_r0.version.__version__"}
 
 [tool.pytest.ini_options]
-pythonpath=["src"]
-testpaths=["tests"]
-addopts="-q"
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"
+markers = [
+  "slow: longer-running local experiment test",
+  "cuda: requires a CUDA runtime",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["wai_r0"]
+omit = [
+  "src/wai_r0/benchmarks.py",
+  "src/wai_r0/cli.py",
+  "src/wai_r0/gui.py",
+  "src/wai_r0/report.py",
+  "src/wai_r0/symbolic.py",
+  "src/wai_r0/eval/holdout.py",
+  "src/wai_r0/eval/leakage_guard.py",
+  "src/wai_r0/eval/prior_diagnostics.py",
+  "src/wai_r0/eval/scorecard.py",
+  "src/wai_r0/eval/suite.py",
+  "src/wai_r0/training/language_csv.py",
+  "src/wai_r0/training/markdown_plan.py",
+  "src/wai_r0/training/probes.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 80
 
 [tool.ruff]
-line-length=120
-target-version="py310"
+target-version = "py310"
+line-length = 100
+exclude = ["build", "dist", ".venv"]
 
 [tool.ruff.lint]
-select=["E","F","I","UP","B","SIM"]
-ignore=["E501"]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "C4", "PIE", "RET"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+ignore_missing_imports = true
+packages = ["wai_r0"]
+

@@ -1,10 +1,119 @@
+WAI-R0 v0.5 — live-audited changed/new files overlay
+
+Generated UTC: 2026-07-11T20:35:51.783208+00:00
+Payload files before manifests: 94
+
+Validation completed:
+- Ruff format check: passed
+- Ruff lint: passed
+- mypy: passed across 44 v0.5 source files
+- v0.5 pytest suite: 109 passed
+- branch-aware coverage: 81.54% (minimum 80%)
+- exact live model compatibility surface: 4 passed
+- MLA-lite profile manifest: completed, decision keep for further study
+- recurrent OOD manifest: completed, decision re_test
+- native shuffled/packed target-token training + exact resume smoke: passed
+- Python source compilation: passed
+- source distribution and wheel build: passed
+- isolated wheel import/version/CLI smoke: passed
+
+Not executed in this CPU-only environment:
+- CUDA kernels and measured GPU peak memory
+- Windows/macOS GitHub Actions jobs
+- the complete original repository test suite (GitHub inspection worked; clone did not)
+
+Files:
+.github/workflows/ci.yml
+APPLY_PATCH.md
+CHANGELOG.md
+CONTRIBUTING.md
+MANIFEST.in
 README.md
-docs/CHAT_CSV_SCHEMA.md
-docs/CSV_LANGUAGE_TRAINING.md
-docs/V0_4_6_CHANGELOG.md
-src/wai_r0/cli.py
-src/wai_r0/gui.py
-src/wai_r0/training/language_csv.py
-tests/test_v041_gui.py
-tests/test_v04_csv_training.py
-PATCH_FILES.txt
+SECURITY.md
+configs/experiments/mla_memory.yaml
+configs/experiments/recurrent_ood.yaml
+configs/model/mini_8gb.yaml
+configs/model/mini_8gb_mla.yaml
+configs/model/nano_gqa.yaml
+configs/model/nano_mla.yaml
+configs/model/nano_moe.yaml
+configs/model/nano_recurrent.yaml
+docs/ARCHITECTURE.md
+docs/CHECKPOINT_FORMAT.md
+docs/DATA_SCHEMA.md
+docs/EVALUATION_PROTOCOL.md
+docs/EXPERIMENT_MANIFEST.md
+docs/HARDWARE_8GB.md
+docs/MIGRATION_V04_TO_V05.md
+docs/QUALITY_GATES.md
+docs/REPRODUCIBILITY.md
+docs/SCIENTIFIC_LIMITS.md
+docs/TOKENIZATION.md
+docs/TRAINING_PROTOCOL.md
+docs/V0_5_IMPLEMENTATION.md
+docs/VALIDATION.md
+main.py
+pyproject.toml
+scripts/check_v05_quality.py
+src/wai_r0/__init__.py
+src/wai_r0/app/__init__.py
+src/wai_r0/app/services.py
+src/wai_r0/config.py
+src/wai_r0/core/__init__.py
+src/wai_r0/core/reproducibility.py
+src/wai_r0/core/runtime.py
+src/wai_r0/data/__init__.py
+src/wai_r0/data/chat.py
+src/wai_r0/data/csv_reader.py
+src/wai_r0/data/dedupe.py
+src/wai_r0/data/manifest.py
+src/wai_r0/data/packing.py
+src/wai_r0/data/schema.py
+src/wai_r0/data/splits.py
+src/wai_r0/data/streaming.py
+src/wai_r0/eval/__init__.py
+src/wai_r0/eval/algorithmic.py
+src/wai_r0/eval/gates.py
+src/wai_r0/eval/metrics.py
+src/wai_r0/experiments/__init__.py
+src/wai_r0/experiments/manifest.py
+src/wai_r0/experiments/runner.py
+src/wai_r0/experiments/statistics.py
+src/wai_r0/model.py
+src/wai_r0/modeling/__init__.py
+src/wai_r0/modeling/attention.py
+src/wai_r0/modeling/common.py
+src/wai_r0/modeling/feedforward.py
+src/wai_r0/modeling/recurrence.py
+src/wai_r0/modeling/transformer.py
+src/wai_r0/modeling/types.py
+src/wai_r0/profiler.py
+src/wai_r0/py.typed
+src/wai_r0/reporting/__init__.py
+src/wai_r0/reporting/render.py
+src/wai_r0/reporting/schema.py
+src/wai_r0/training/__init__.py
+src/wai_r0/training/checkpoint.py
+src/wai_r0/training/engine.py
+src/wai_r0/training/losses.py
+src/wai_r0/training/optimizer.py
+src/wai_r0/training/schedules.py
+src/wai_r0/v05_cli.py
+src/wai_r0/version.py
+tests/conftest.py
+tests/test_v05_algorithmic.py
+tests/test_v05_algorithmic_runner.py
+tests/test_v05_checkpoint.py
+tests/test_v05_cli.py
+tests/test_v05_cli_integration.py
+tests/test_v05_config_validation.py
+tests/test_v05_data.py
+tests/test_v05_experiment_runner.py
+tests/test_v05_language_service.py
+tests/test_v05_manifest_reporting.py
+tests/test_v05_model.py
+tests/test_v05_model_edge_cases.py
+tests/test_v05_modeling_common.py
+tests/test_v05_streaming_packing.py
+tests/test_v05_training_primitives.py
+tests/test_v05_training_profile_statistics.py

@@ -1,3 +1,5 @@
-"""WAI-R0: zero-training reasoning architecture diagnostics."""
+"""WAI-R0: evidence-first architecture research tooling."""
 
-__version__ = "0.4.5"
+from wai_r0.version import __version__
+
+__all__ = ["__version__"]

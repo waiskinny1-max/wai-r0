@@ -5,19 +5,19 @@ import sys
 
 
 def _bootstrap_src_layout() -> None:
-    """Allow `python main.py` from an uninstalled source checkout."""
+    """Allow ``python main.py`` from an uninstalled source checkout."""
 
-    root = Path(__file__).resolve().parent
-    src = root / "src"
-    if src.exists():
-        src_text = str(src)
-        if src_text not in sys.path:
-            sys.path.insert(0, src_text)
+    source = Path(__file__).resolve().parent / "src"
+    source_text = str(source)
+    if source.is_dir() and source_text not in sys.path:
+        sys.path.insert(0, source_text)
 
 
-_bootstrap_src_layout()
+def main() -> int:
+    _bootstrap_src_layout()
+    from wai_r0.v05_cli import main as entrypoint
 
-from wai_r0.cli import main  # noqa: E402
+    return entrypoint()
 
 
 if __name__ == "__main__":

@@ -1,162 +1,166 @@
 # WAI-R0
 
-WAI-R0 is a zero-training reasoning architecture lab.
+**Current release:** `0.5.0` — Evidence Engine
 
-It does **not** claim random neural networks can reason. It tests whether a reasoning-oriented architecture has measurable structure worth training: stable signal propagation, memory behavior, recurrent latent refinement, MoE routing health, symbolic search compatibility, verifier integration, and tiny-training sample efficiency.
+WAI-R0 is a local-first research platform for testing language-model architecture ideas under explicit controls before committing to expensive training. Version 0.5 replaces the prototype model core and adds an auditable path from dataset to checkpoint to candidate/control report.
 
-Status: `v0.4.6 hygiene-checked CSV/chat language-readiness prototype`.
+WAI-R0 does **not** claim that random weights reason, that symbolic solver performance is neural capability, or that tiny-model results transfer to frontier scale.
 
-## What is implemented
+## v0.5 capabilities
 
-- Decoder-only causal transformer with RMSNorm, RoPE, SwiGLU, MHA/GQA, deterministic initialization, and generation smoke path.
-- MLA-lite compressed K/V attention. This is an MLA-inspired diagnostic module, not a DeepSeek MLA reproduction.
-- Recurrent latent iterative refinement state with norm/drift logging. It is not called "thought" in reports.
-- Tiny top-k MoE layer with router entropy, expert load, and collapse warning.
-- ARC-style symbolic DSL and verified program search. Symbolic success is reported as symbolic, not neural.
-- Tier-1 architecture-prior diagnostics for position, identity-signal, memory mechanics, recurrence, and MoE routing.
-- Local leakage guard that hashes task content and flags cross-split duplicates.
-- Deterministic generated ARC-style holdouts for local dev/validation separation.
-- Multi-seed ablation matrix including A7 symbolic-only and A8 hybrid variants.
-- Tiny-training probes with length extrapolation checks.
-- JSON and markdown report export with metadata, limitations, and conservative recommendations.
-- CPU-safe tests.
+### Correct model mechanics
 
-## Install
+- Modular decoder with RMSNorm, RoPE, SwiGLU, MHA/GQA, and MLA-lite.
+- Real autoregressive MHA/GQA KV caching and MLA-lite latent caching.
+- Padding, explicit positions, packed block-diagonal attention, and cache-aware masks.
+- Cached/full-context and cached/uncached generation equivalence tests.
+- Requested dtype applied to parameters; unsupported CPU FP16 fails explicitly.
+- Explicit `ModelOutput` with cache, hidden states, auxiliary losses, and opt-in diagnostics.
+- Recurrent refinement with per-call budgets and fixed/drift/learned stopping policies.
+- Capacity-limited top-k MoE with accepted/dropped routes, balancing loss, router z-loss, and shared expert.
+
+### Reproducible data and training
+
+- Strict canonical conversation CSV audit, duplicate detection, deterministic splits, and manifests.
+- Deterministic byte-chat tokenizer and assistant-only targets.
+- Bounded deterministic shuffle whose buffer, RNG, and epoch boundary are checkpointed.
+- Optional sequence packing with block-diagonal attention and boundary-target protection.
+- AdamW, warmup, constant/linear/cosine schedules, accumulation, clipping, AMP, validation, and target-token telemetry.
+- Step or supervised-target-token budgets.
+- Atomic format-2 checkpoints with model/config hashes, exact stream state, RNG, and SHA-256 sidecars.
+
+### Evidence engine
+
+- Deterministic multi-family algorithmic probes with held-out-length evaluation.
+- Preregistered candidate/control manifests.
+- Paired seed statistics, bootstrap confidence intervals, and effect sizes.
+- Non-compensatory correctness, matching, seed-count, robustness, and threshold gates.
+- Measured prefill/decode/cache profiling with explicit, scoped CPU thread control.
+- Versioned JSON plus deterministic Markdown and static HTML reports.
+- Native v0.5 CLI while preserving v0.4 command delegation.
+
+## Installation
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
-pip install -e .[dev]
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
+python -m pip install -e ".[dev]"
+wai-r0 doctor
 ```
 
-## Commands
+Python 3.10 or newer and PyTorch 2.2 or newer are required.
+
+## Core commands
 
 ```bash
-wai-r0 zero-neural --config configs/model/nano.yaml
-wai-r0 architecture-priors --config configs/model/nano.yaml --seq-len 16 --recurrent-depths 1,2,4
-wai-r0 memory --baseline mha --candidate mla_lite --seq-lens 64,128,256
-wai-r0 symbolic-arc --tasks examples/tasks --budget 3s --leakage-manifest reports/leakage_manifest.json --split dev
-wai-r0 generate-holdout --output-dir examples/generated_holdouts --count 8 --seed 2026
-wai-r0 leakage-check --tasks examples/generated_holdouts --split generated_holdout --manifest reports/leakage_manifest.json --register
-wai-r0 tiny-train --task copy --model configs/model/nano.yaml --examples 32 --train-len 8 --eval-lens 8,16,32
-wai-r0 train examples/training.md
-python main.py -train examples/training.md
-wai-r0 ablate --matrix configs/benchmark/ablation.yaml --seeds 1337,2026 --tiny-examples 8
-wai-r0 suite --config configs/model/nano.yaml --suite configs/benchmark/suite.yaml
-wai-r0 report --input reports/latest.json --format md
-python main.py  # opens the local Tkinter workbench
+wai-r0 version
+wai-r0 doctor
+wai-r0 config validate configs/model/nano.yaml
+wai-r0 data audit training/synthetic_conversation_reasoning_500k.csv --output reports/data-audit.json
+wai-r0 data manifest training/synthetic_conversation_reasoning_500k.csv --output reports/data-manifest.json
+wai-r0 model inspect --config configs/model/nano.yaml --seq-len 16 --diagnostics
+wai-r0 profile --config configs/model/nano.yaml --seq-len 32 --cpu-threads 1 --output reports/profile.json
+wai-r0 experiment validate configs/experiments/mla_memory.yaml
+wai-r0 experiment run configs/experiments/mla_memory.yaml --output reports/mla-memory.json
+wai-r0 report render reports/mla-memory.json --output reports/mla-memory.html
+wai-r0 checkpoint inspect checkpoints/step-00000100.pt
 ```
 
-Use larger tiny-training budgets only after the smoke path works on your hardware.
-
-## Result labels
-
-| Label | Meaning |
-|---|---|
-| `zero-training neural diagnostic` | Random-weight numerical sanity. Not intelligence. |
-| `architecture-prior diagnostic` | No-gradient architecture mechanics: activation stability, position proxy, identity signal, memory mechanics, recurrence, and routing. |
-| `zero-training symbolic solver result` | Explicit symbolic program search. Not neural reasoning. |
-| `tiny-training architecture probe` | Small supervised algorithmic learning probe. |
-| `mixed architecture diagnostic` | Ablation report combining diagnostics; still not proof of reasoning. |
-
-
-
-
-## v0.4.5 chat CSV support
-
-WAI-R0 auto-detects instruction CSVs with `system`, `user`, `assistant`, and optional `split` columns. For the 500k synthetic conversation CSV, leave the GUI `Text column` and `Target column` fields blank. The trainer converts each row into a stable `SYSTEM / USER / ASSISTANT` byte-level training sample. By default, CSV training uses deterministic hash splits even when a `split` column exists; pass `--respect-csv-split` only when the file actually contains usable validation/test rows.
+Native conversation training:
 
 ```bash
-python main.py audit-csv --csv training/synthetic_conversation_reasoning_500k.csv --max-rows 500000
-python main.py train-csv --csv training/synthetic_conversation_reasoning_500k.csv --steps 500 --batch-size 8 --seq-len 128 --stream
+wai-r0 train csv training/synthetic_conversation_reasoning_500k.csv \
+  --config configs/model/mini_8gb.yaml \
+  --output-dir reports/language-run \
+  --max-target-tokens 1000000 \
+  --batch-size 2 \
+  --seq-len 256 \
+  --gradient-accumulation-steps 8 \
+  --mixed-precision bf16 \
+  --checkpoint-every 100 \
+  --shuffle-buffer-size 2048 \
+  --pack-sequences
 ```
 
-## v0.4.6 hygiene/trust patch
 
-This patch does not add model capability. It hardens the repo before v0.5:
+For CPU experiments, set `--cpu-threads` explicitly. Tiny tensor operations can be slower with dozens of intra-op threads; WAI-R0 scopes the requested value to the run, records it, and restores the process default afterward. The supplied CPU-facing experiment manifests use one intra-op thread.
 
-- `python main.py` falls back to a terminal workbench instead of crashing in headless shells.
-- `python main.py doctor` checks source layout, Torch/CUDA, Tkinter, config files, CSV schema, and checkpoint paths.
-- The GUI labels the default schema/split behavior so the training panel is harder to misread.
-- README/docs now state the safer default: hash split unless `--respect-csv-split` is explicitly passed.
+Use `--max-steps` instead of `--max-target-tokens` for an explicitly step-matched run. Existing v0.4 names such as `architecture-priors`, `memory`, `suite`, `tiny-train`, `train-csv`, `generate-holdout`, `leakage-check`, and `ablate` are delegated to the compatibility CLI.
 
+## Model API
 
-## v0.4.1 GUI update
+The tensor-returning API remains compatible:
 
-`python main.py` now opens a local Tkinter workbench when no CLI arguments are supplied. The GUI lets you select a CSV file, audit it, launch CSV training with streamed logs, stop the run, sample from a checkpoint, and trigger the main benchmark commands. The GUI runs the same CLI commands underneath; it does not create a separate training path. See `docs/TKINTER_WORKBENCH.md`.
+```python
+import torch
 
-CLI streaming was also added:
+from wai_r0.config import ReasonerConfig
+from wai_r0.model import ReasonerCore
+
+config = ReasonerConfig.from_yaml("configs/model/nano.yaml")
+model = ReasonerCore(config)
+tokens = torch.randint(0, config.vocab_size, (1, 8))
+logits = model(tokens)
+```
+
+Structured output:
+
+```python
+output = model(tokens, use_cache=True, return_dict=True)
+print(output.logits.shape)
+print(output.past_key_values)
+print(output.auxiliary_losses)
+```
+
+## Native run artifacts
+
+A successful native CSV run writes:
+
+- dataset and tokenizer manifests;
+- structured event log;
+- digest-protected checkpoint(s);
+- JSON/Markdown/HTML report;
+- exact `REPRODUCE.txt` command.
+
+The stream state includes source hash, row/epoch cursor, shuffle contents/RNG, pending epoch boundary, and packing/objective semantics. Resume rejects changed source or incompatible configuration.
+
+## 8 GB GPU profile
+
+`configs/model/mini_8gb.yaml` is a conservative starting point, not a universal guarantee. Profile the actual machine first. Sequence length, resident batch, optimizer, precision, driver/runtime, MoE storage, and activation behavior materially change memory use.
+
+## Verification
 
 ```bash
-wai-r0 train-csv --csv training/basic_lang_500k.csv --text-column text --stream
-wai-r0 sample-csv --checkpoint reports/csv_probe.pt --prompt "A noun is" --stream
+python scripts/check_v05_quality.py
+pytest
+pytest --cov=wai_r0 --cov-report=term-missing
+python -m build
 ```
 
-## v0.3 additions
+Static quality and the coverage floor apply to v0.5 files. Preserved v0.4 compatibility modules remain in the full runtime test suite. See `docs/QUALITY_GATES.md`.
 
-| Area | What changed | Why it matters |
-|---|---|---|
-| Tier-1 diagnostics | Adds `architecture-priors` command | Tests architecture mechanics before wasting tiny-training runs. |
-| Prior probes | Activation sanity, position proxy, identity signal, memory mechanics, recurrence, routing | Gives falsifiable no-gradient signals without claiming reasoning. |
-| Suite runner | Adds `suite` command and `configs/benchmark/suite.yaml` | Runs the standard smoke ladder from one config. |
-| Reporting | Prior suite exports JSON/Markdown through the existing report system | Keeps metadata, limitations, and recommendation discipline consistent. |
+## Scientific boundary
 
-## v0.2.1 mini patch
+- Tiny generated-task evidence is screening evidence, not scale-transfer proof.
+- MLA-lite is MLA-inspired and is not DeepSeek MLA.
+- Recurrent latent states are not described as thoughts.
+- Symbolic results remain symbolic or hybrid evidence.
+- Estimates and measurements are labeled separately.
+- CPU performance ordering may not transfer to GPU.
+- Eight-gigabyte hardware cannot validate 7B pretraining claims.
 
-`wai-r0 train <plan.md>` and `python main.py -train <plan.md>` load a Markdown training plan and run the existing tiny-training architecture probe. The Markdown file is declarative only: unsupported keys are rejected, and arbitrary Markdown/shell/Python instructions are not executed.
+## Documentation
 
-Supported plan fields:
-
-```yaml
-mode: tiny_probe
-config: configs/model/nano.yaml
-task: copy
-examples: 16
-batch_size: 4
-train_len: 8
-eval_lens: [8, 16]
-output: reports/train_md
-```
-
-## v0.2 additions
-
-| Area | What changed | Why it matters |
-|---|---|---|
-| Leakage guard | Hashes tasks and records split provenance | Avoids silently mixing generated/dev/public tasks. |
-| Generated holdouts | Creates deterministic toy ARC-style tasks | Gives local validation tasks without pretending they are ARC-AGI. |
-| Ablations | Adds A7 symbolic-only and A8 hybrid variants | Separates symbolic-system performance from neural diagnostics. |
-| Tiny training | Reports evaluation accuracy across lengths | Starts measuring length extrapolation instead of only loss movement. |
-| CLI | Adds `generate-holdout` and `leakage-check` | Makes the protocol runnable, not just documented. |
-
-## Scientific limits
-
-- Random weights do not contain learned language, world knowledge, arithmetic procedures, or planning skill.
-- Symbolic solver results are system results, not neural-network reasoning.
-- Tiny-training probes do not prove frontier reasoning.
-- Generated holdouts are toy architecture diagnostics, not a substitute for ARC-AGI.
-- ARC-style tasks are useful but incomplete and leakage-prone if repeatedly tuned against public eval.
-
-## Repository map
-
-```text
-src/wai_r0/
-  config.py              model/benchmark dataclasses and YAML loading
-  model.py               transformer, attention, MLA-lite, MoE, recurrence, core API
-  symbolic.py            ARC-style grid DSL and program search
-  benchmarks.py          zero-neural, architecture-prior, memory, symbolic, tiny-train, ablations
-  report.py              metadata, JSON/markdown reports, recommendations
-  cli.py                 wai-r0 command surface
-  eval/
-    leakage_guard.py     content-hash task provenance checks
-    prior_diagnostics.py architecture-prior probes
-    suite.py             ordered diagnostic suite runner
-    holdout.py           deterministic generated ARC-style tasks
-    scorecard.py         keep/kill/re-test score helpers
-  training/
-    probes.py            tiny supervised algorithmic probes
-    markdown_plan.py     declarative Markdown training-plan parser
-```
-
-## Current recommendation
-
-v0.3 is good enough for local architecture iteration and honest diagnostic reports. It is **not** enough to justify serious pretraining. The next experiment should add broader algorithmic probes, longer-context profiler runs, baseline-vs-candidate plots, and stricter per-component keep/kill thresholds.
+- `docs/ARCHITECTURE.md`
+- `docs/TRAINING_PROTOCOL.md`
+- `docs/EVALUATION_PROTOCOL.md`
+- `docs/REPRODUCIBILITY.md`
+- `docs/DATA_SCHEMA.md`
+- `docs/TOKENIZATION.md`
+- `docs/CHECKPOINT_FORMAT.md`
+- `docs/EXPERIMENT_MANIFEST.md`
+- `docs/HARDWARE_8GB.md`
+- `docs/SCIENTIFIC_LIMITS.md`
+- `docs/MIGRATION_V04_TO_V05.md`
+- `docs/QUALITY_GATES.md`
+- `docs/VALIDATION.md`

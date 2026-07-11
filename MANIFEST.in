@@ -1,0 +1,10 @@
+include APPLY_PATCH.md
+include CHANGELOG.md
+include CONTRIBUTING.md
+include SECURITY.md
+include main.py
+include pyproject.toml
+recursive-include configs *.yaml
+recursive-include docs *.md
+recursive-include scripts *.py
+recursive-include tests *.py
