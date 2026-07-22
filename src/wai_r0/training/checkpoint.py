@@ -21,8 +21,8 @@ from wai_r0.core.reproducibility import (
 )
 from wai_r0.version import __version__
 
-CHECKPOINT_FORMAT_VERSION = 2
-SUPPORTED_CHECKPOINT_FORMATS = {1, 2}
+CHECKPOINT_FORMAT_VERSION = 3
+SUPPORTED_CHECKPOINT_FORMATS = {1, 2, 3}
 
 
 @dataclass(slots=True)
@@ -59,6 +59,7 @@ class RestoredCheckpoint:
     metadata: dict[str, Any]
     data_state: dict[str, Any]
     extra_state: dict[str, Any]
+    lineage: dict[str, Any]
     checkpoint_version: int
 
 
@@ -136,6 +137,7 @@ def save_checkpoint(
     metadata: Mapping[str, Any] | None = None,
     data_state: Mapping[str, Any] | None = None,
     extra_state: Mapping[str, Any] | None = None,
+    lineage: Mapping[str, Any] | None = None,
     rng_state: RngState | None = None,
     overwrite: bool = False,
     write_digest: bool = True,
@@ -164,6 +166,7 @@ def save_checkpoint(
         "metadata": dict(metadata or {}),
         "data_state": dict(data_state or {}),
         "extra_state": dict(extra_state or {}),
+        "lineage": dict(lineage or {}),
         "rng": rng_state or capture_rng_state(),
     }
 
@@ -280,11 +283,13 @@ def load_checkpoint(
     metadata = payload.get("metadata") or {}
     data_state = payload.get("data_state") or payload.get("extra_state", {}).get("data_state", {})
     extra_state = payload.get("extra_state") or {}
+    lineage = payload.get("lineage") or {}
     for name, value in (
         ("config", config),
         ("metadata", metadata),
         ("data_state", data_state),
         ("extra_state", extra_state),
+        ("lineage", lineage),
     ):
         if not isinstance(value, dict):
             raise ValueError(f"checkpoint {name} must be a mapping")
@@ -294,6 +299,7 @@ def load_checkpoint(
         metadata=metadata,
         data_state=data_state,
         extra_state=extra_state,
+        lineage=lineage,
         checkpoint_version=int(format_version),
     )
 
@@ -315,6 +321,7 @@ def inspect_checkpoint(path: str | Path) -> dict[str, Any]:
         "metadata": payload.get("metadata"),
         "data_state_keys": sorted((payload.get("data_state") or {}).keys()),
         "extra_state_keys": sorted((payload.get("extra_state") or {}).keys()),
+        "lineage": payload.get("lineage") or {},
         "model_tensor_count": tensor_count,
         "has_optimizer": payload.get("optimizer") is not None,
         "has_scheduler": payload.get("scheduler") is not None,

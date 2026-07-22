@@ -12,7 +12,10 @@ from wai_r0.eval.algorithmic import (
     fixed_algorithmic_examples,
     generate_algorithmic_example,
 )
+from wai_r0.eval.context import ContextEvaluation, ContextTask, evaluate_context_task
 from wai_r0.eval.gates import decide_non_compensatory
+from wai_r0.eval.generation import GenerationDiagnostics, diagnose_generation
+from wai_r0.eval.language import LanguageEvaluation, evaluate_language_batches
 from wai_r0.eval.metrics import SequenceMetrics, evaluate_sequence_batches
 
 __all__ = [
@@ -21,7 +24,11 @@ __all__ = [
     "AlgorithmicEvaluation",
     "AlgorithmicExample",
     "AlgorithmicTask",
+    "ContextEvaluation",
+    "ContextTask",
     "GeneratedTaskSpec",
+    "GenerationDiagnostics",
+    "LanguageEvaluation",
     "LeakageFinding",
     "LeakageGuard",
     "PriorProbe",
@@ -30,7 +37,10 @@ __all__ = [
     "SequenceMetrics",
     "collate_algorithmic",
     "decide_non_compensatory",
+    "diagnose_generation",
     "encode_algorithmic_example",
+    "evaluate_context_task",
+    "evaluate_language_batches",
     "evaluate_sequence_batches",
     "fixed_algorithmic_examples",
     "generate_algorithmic_example",

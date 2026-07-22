@@ -1,48 +1,50 @@
-# Apply the WAI-R0 v0.5 Patch
+# Apply the WAI-R0 v0.6 Ground Truth Patch
 
-This archive contains **only new or changed files**. It is an overlay, not a complete repository checkout.
+This archive contains only files added or changed relative to the already-applied v0.5 Evidence Engine commit. It is an overlay, not a complete repository.
 
 ## Apply
 
-From the root of the existing `wai-r0` clone:
+From the repository root:
 
 ```bash
-git switch -c v0.5-evidence-engine
-unzip wai-r0-v0.5-live-audited-changed-files-only.zip -d .
+git switch -c v0.6-ground-truth
+unzip wai-r0-v0.6-ground-truth-changed-files-only.zip -d .
 git status --short
 git diff --stat
-git diff
+git diff --check
 ```
 
-Files with matching paths are intentional replacements. Files absent from the archive must remain in place because the v0.5 CLI delegates legacy command names to the preserved v0.4 implementation.
+Do not delete files absent from the archive. Legacy v0.4 modules remain as a narrow compatibility fallback.
 
 ## Verify
 
 ```bash
 python -m pip install -e ".[dev]"
-python scripts/check_v05_quality.py
+python scripts/check_quality.py
 pytest
 pytest --cov=wai_r0 --cov-report=term-missing
+python scripts/verify_release.py --repository .
 python -m build
-wai-r0 version
-wai-r0 doctor
-wai-r0 config validate configs/model/nano.yaml
-wai-r0 experiment validate configs/experiments/mla_memory.yaml
-wai-r0 experiment validate configs/experiments/recurrent_ood.yaml
+python main.py version
+python -m wai_r0 version
+wai-r0 release doctor
+wai-r0 tokenizer --help
+wai-r0 data --help
+wai-r0 train --help
 ```
 
-Expected package version: `0.5.0`.
+Expected version: `0.6.0`.
 
-## Review before commit
+## Commit
 
 ```bash
-git diff --check
-git status --short
 git add -A
 git diff --cached --stat
-git commit -m "WAI-R0 v0.5 Evidence Engine"
+git diff --cached --check
+git commit -m "WAI-R0 v0.6 Ground Truth"
+git push
 ```
 
-## Hardware note
+## Hardware boundary
 
-The supplied 8 GB configurations request CUDA. CUDA execution was not available in the build environment. Profile and smoke-test them on the target GPU before any long run.
+The implementation contains CUDA inspection and calibration, but the build environment used for this patch had CPU-only PyTorch. Run `wai-r0 hardware calibrate` on the target 8 GB GPU before a long mixed-precision run. Do not treat the theoretical estimator as a measurement.

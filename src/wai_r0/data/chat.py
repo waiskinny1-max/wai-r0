@@ -132,6 +132,39 @@ def _truncate_preserving_target(
     return [*retained_prefix, *assistant_prefix, *target], first_target, truncated
 
 
+def encode_chat_prompt(
+    user: str,
+    *,
+    system: str = "",
+    tokenizer: Tokenizer | None = None,
+    max_length: int | None = None,
+) -> list[int]:
+    """Encode an inference prompt using the same versioned role template as training.
+
+    The returned sequence ends with the assistant role token and contains no
+    assistant target or EOS token after that marker. When a maximum length is
+    supplied, old context is removed from the left while preserving BOS and the
+    assistant marker.
+    """
+
+    if not user.strip():
+        raise ValueError("chat prompt user field cannot be empty")
+    active_tokenizer = tokenizer or ByteChatTokenizer()
+    tokens = [active_tokenizer.bos_token_id]
+    if system:
+        tokens.extend(_segment(active_tokenizer.system_token_id, system, active_tokenizer))
+    tokens.extend(_segment(active_tokenizer.user_token_id, user, active_tokenizer))
+    tokens.append(active_tokenizer.assistant_token_id)
+    if max_length is None:
+        return tokens
+    if max_length < 2:
+        raise ValueError("max_length must be at least 2")
+    if len(tokens) <= max_length:
+        return tokens
+    # Preserve the stable BOS and assistant-role boundary.
+    return [active_tokenizer.bos_token_id, *tokens[-(max_length - 1) :]]
+
+
 def encode_chat_example(
     example: ChatExample,
     *,
@@ -214,5 +247,6 @@ __all__ = [
     "EncodedChatExample",
     "Tokenizer",
     "encode_chat_example",
+    "encode_chat_prompt",
     "pad_chat_batch",
 ]

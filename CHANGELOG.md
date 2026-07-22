@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.6.0 — Ground Truth
+
+### Repository and application surface
+
+- Moved the native command implementation to the stable `wai_r0.app.cli` entry point and retained `v05_cli` only as a compatibility shim.
+- Added `python -m wai_r0`, stable top-level help, a release doctor, and clean-source verification.
+- Added pull-request, nightly, release, reproducibility, and optional self-hosted CUDA workflows.
+
+### Tokenization and data
+
+- Added deterministic byte-level BPE with byte fallback, role tokens, corpus/artifact hashes, save/load, and reference-equivalence tests.
+- Kept deterministic byte tokenization as the zero-dependency control.
+- Added one versioned chat encoding path shared by training and inference.
+- Added format-2 compiled memory-mapped datasets with checksummed token/label/index shards, exact split summaries, source/tokenizer/template hashes, and raw-byte accounting.
+- Added full pre-compilation audit and fail-closed exact cross-split duplicate rejection.
+- Added deterministic O(1) affine shuffle state and optional packed sequence blocks.
+
+### Training and checkpoints
+
+- Added native compiled-dataset training and exact resume.
+- Added checkpoint format 3 with parent lineage, training stage, tokenizer hash, dataset hash, and complete optimizer/scheduler/scaler/RNG/data state.
+- Added optional activation checkpointing, fused AdamW, and `torch.compile` paths.
+- Expanded telemetry with target/raw throughput, padding fraction, parameter norm, scaler scale, and GPU allocator peaks.
+
+### Hardware, evaluation, inference, and registry
+
+- Added CPU/CUDA capability inventory, theoretical memory estimation, and measured calibration.
+- Added held-out language evaluation with NLL, perplexity, bits per target token, and bits per raw byte.
+- Added synthetic context retrieval/induction evaluation and generation diagnostics.
+- Added native cached generation with greedy and seeded sampling controls.
+- Added a transactional SQLite run registry with lineage and artifact records.
+- Added bounded deterministic grid sweeps with stable plan/trial hashes.
+
+### Validation
+
+- Added 0.6-specific unit, invariant, corruption, CLI, lineage, compilation, inference, sweep, and end-to-end tests.
+- Updated static-quality, coverage, package, and release verification commands.
+- Executed a real deterministic BPE → compiled dataset → training → exact resume → inference lineage on CPU. The model learned narrow held-out templates but did not demonstrate general arithmetic or classification reasoning.
+
 ## 0.5.0 — Evidence Engine
 
 ### Architecture correctness
@@ -12,37 +51,6 @@
 - Removed recurrent frozen-config mutation and unused runtime scratchpad state.
 - Moved diagnostics out of the ordinary hot path.
 
-### MoE and recurrence
+### Data, training, evaluation, and tooling
 
-- Added top-k route normalization, capacity factor/minimum capacity, highest-weight acceptance, dropped-route accounting, raw/accepted loads, balancing loss, router z-loss, and shared expert.
-- Added fixed, drift, and learned recurrent stopping with per-call budgets and optional ponder loss.
-- Added total/trainable/active-per-token parameter accounting.
-
-### Data and tokenization
-
-- Added strict canonical conversation schema, streaming audit, rejection sampling, duplicate-ID/content checks, deterministic split assignment, and hash-verified manifests.
-- Added deterministic byte-chat tokenizer manifests and assistant-only target masking.
-- Added bounded deterministic shuffle with exact buffer/RNG/epoch-boundary restoration.
-- Added optional greedy packing with block-diagonal causal masks and cross-example target protection.
-
-### Training and checkpoints
-
-- Added unified trainer with AdamW groups, constant/linear/cosine schedules, warmup, accumulation, clipping, AMP, validation, step and target-token budgets, and structured telemetry.
-- Added format-2 atomic checkpoints containing model, optimizer, scheduler, scaler, progress, RNG, data state, model signature, and config hash.
-- Added atomic SHA-256 sidecars, stale-sidecar removal, digest verification, and fail-closed resume compatibility checks.
-
-### Evaluation and reporting
-
-- Added deterministic algorithmic tasks: copy, reverse, parity, modular addition, sorting, selective copy, associative recall, bracket balance, and finite-state parity.
-- Added in-distribution and held-out-length evaluation, paired-seed comparisons, bootstrap confidence intervals, effect sizes, wins/losses/ties, and failed-seed visibility.
-- Added executable profile, algorithmic, and external-metric experiment manifests with preregistered thresholds and budget checks.
-- Added non-compensatory gates and versioned JSON/Markdown/static-HTML reports.
-- Added measured prefill/decode/cache/throughput profiling.
-- Added scoped CPU intra-op thread control for training, evaluation, and profiling; the effective value is reported and restored after each operation.
-
-### Tooling and compatibility
-
-- Added native v0.5 CLI commands and preserved v0.4 command delegation.
-- Added complete native CSV artifacts and reproduction commands.
-- Added scoped Ruff/mypy gates, branch-aware coverage floor, cross-platform tests, package build, and clean-wheel smoke CI.
-- Added migration, architecture, protocol, reproducibility, data, tokenizer, hardware, quality, security, and scientific-limit documentation.
+- Added strict conversation audit, deterministic byte-chat training, shuffle/packing, exact checkpoints, algorithmic experiments, paired statistics, non-compensatory gates, reports, profiling, and native v0.5 CLI compatibility.

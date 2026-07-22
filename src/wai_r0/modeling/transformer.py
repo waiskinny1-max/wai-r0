@@ -5,6 +5,7 @@ from typing import Any
 
 import torch
 from torch import nn
+from torch.utils.checkpoint import checkpoint
 
 from wai_r0.config import ReasonerConfig
 from wai_r0.modeling.attention import CausalSelfAttention, MLALiteAttention
@@ -78,10 +79,18 @@ class DecoderOnlyTransformer(nn.Module):
         self.norm = RMSNorm(cfg.d_model, cfg.norm_epsilon)
         self.head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
         self.last_diagnostics: dict[str, Any] = {}
+        self.gradient_checkpointing = False
         if cfg.tie_embeddings:
             self.head.weight = self.embed.weight
         self.apply(self._initialize_module)
         self._scale_residual_projections()
+
+    def set_gradient_checkpointing(self, enabled: bool) -> None:
+        if enabled and any(isinstance(block.ff, TopKMoE) for block in self.blocks):
+            raise ValueError(
+                "gradient checkpointing currently supports dense feed-forward blocks only"
+            )
+        self.gradient_checkpointing = bool(enabled)
 
     def _initialize_module(self, module: nn.Module) -> None:
         if isinstance(module, (nn.Linear, nn.Embedding)):
@@ -159,14 +168,43 @@ class DecoderOnlyTransformer(nn.Module):
         auxiliary_losses: dict[str, torch.Tensor] = {}
 
         for layer_index, (block, cache) in enumerate(zip(self.blocks, layer_caches, strict=True)):
-            hidden, present, block_auxiliary = block(
-                hidden,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
-                past_key_value=cache,
-                use_cache=use_cache,
-                collect_diagnostics=collect,
-            )
+            if self.gradient_checkpointing and self.training:
+                if use_cache or cache is not None:
+                    raise ValueError(
+                        "gradient checkpointing is incompatible with KV-cache training"
+                    )
+                if collect:
+                    raise ValueError(
+                        "gradient checkpointing is incompatible with diagnostics collection"
+                    )
+
+                def checkpointed_block(
+                    value: torch.Tensor, active_block: Block = block
+                ) -> torch.Tensor:
+                    result, present_value, auxiliary = active_block(
+                        value,
+                        attention_mask=attention_mask,
+                        position_ids=position_ids,
+                        past_key_value=None,
+                        use_cache=False,
+                        collect_diagnostics=False,
+                    )
+                    if present_value is not None or auxiliary:
+                        raise RuntimeError("checkpointed dense block returned unexpected state")
+                    return result
+
+                hidden = checkpoint(checkpointed_block, hidden, use_reentrant=False)
+                present = None
+                block_auxiliary: dict[str, torch.Tensor] = {}
+            else:
+                hidden, present, block_auxiliary = block(
+                    hidden,
+                    attention_mask=attention_mask,
+                    position_ids=position_ids,
+                    past_key_value=cache,
+                    use_cache=use_cache,
+                    collect_diagnostics=collect,
+                )
             if present is not None:
                 presents.append(present)
             if collect:

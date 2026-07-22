@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 
 def _bootstrap_src_layout() -> None:
@@ -15,7 +15,7 @@ def _bootstrap_src_layout() -> None:
 
 def main() -> int:
     _bootstrap_src_layout()
-    from wai_r0.v05_cli import main as entrypoint
+    from wai_r0.app.cli import main as entrypoint
 
     return entrypoint()
 

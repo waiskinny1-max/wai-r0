@@ -37,7 +37,7 @@ dev = [
 ]
 
 [project.scripts]
-wai-r0 = "wai_r0.v05_cli:main"
+wai-r0 = "wai_r0.app.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

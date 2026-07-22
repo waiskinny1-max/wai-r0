@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 
 from wai_r0.v05_cli import main
+from wai_r0.version import __version__
 
 
 def _model_config(path: Path, *, attention: str = "gqa") -> None:
@@ -230,4 +231,4 @@ def test_main_py_bootstraps_uninstalled_source_layout() -> None:
         text=True,
         timeout=30,
     )
-    assert completed.stdout.strip() == "0.5.0"
+    assert completed.stdout.strip() == __version__

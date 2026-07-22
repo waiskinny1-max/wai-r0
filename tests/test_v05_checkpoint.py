@@ -8,6 +8,7 @@ import torch
 from wai_r0.config import ReasonerConfig
 from wai_r0.model import ReasonerCore
 from wai_r0.training.checkpoint import (
+    CHECKPOINT_FORMAT_VERSION,
     TrainingProgress,
     inspect_checkpoint,
     load_checkpoint,
@@ -76,7 +77,7 @@ def test_checkpoint_restores_model_optimizer_progress_and_rng(tmp_path) -> None:
         torch.testing.assert_close(actual, expected, rtol=0, atol=0)
 
     summary = inspect_checkpoint(path)
-    assert summary["format_version"] == 2
+    assert summary["format_version"] == CHECKPOINT_FORMAT_VERSION
     assert summary["has_optimizer"] is True
     assert summary["progress"]["global_step"] == 1
 

@@ -59,6 +59,13 @@ class TrainerConfig:
     recurrent_steps: int | None = None
     require_checkpoint_digest: bool = True
     cpu_threads: int | None = None
+    activation_checkpointing: bool = False
+    compile_model: bool = False
+    fused_optimizer: bool = False
+    training_stage: str = "pretraining"
+    parent_checkpoint: str | None = None
+    dataset_manifest_hash: str | None = None
+    tokenizer_manifest_hash: str | None = None
 
     def validate(self) -> None:
         if self.max_steps is None and self.max_target_tokens is None:
@@ -108,6 +115,14 @@ class TrainerConfig:
             isinstance(self.cpu_threads, bool) or self.cpu_threads < 1
         ):
             raise ValueError("cpu_threads must be a positive integer when set")
+        if not self.training_stage.strip():
+            raise ValueError("training_stage cannot be empty")
+        for name, value in (
+            ("dataset_manifest_hash", self.dataset_manifest_hash),
+            ("tokenizer_manifest_hash", self.tokenizer_manifest_hash),
+        ):
+            if value is not None and len(value) != 64:
+                raise ValueError(f"{name} must be a SHA-256 digest when set")
 
 
 @dataclass(slots=True)
@@ -124,6 +139,13 @@ class TrainingMetrics:
     consumed_examples: int
     step_time_ms: float
     target_tokens_per_second: float
+    raw_tokens: int
+    raw_tokens_per_second: float
+    padding_fraction: float
+    parameter_norm: float
+    scaler_scale: float
+    max_allocated_bytes: int
+    max_reserved_bytes: int
     validation_loss: float | None = None
 
 
@@ -154,12 +176,25 @@ class Trainer:
         self.model = model
         self.config = config
         self.device = next(model.parameters()).device
+        transformer = getattr(model, "transformer", None)
+        set_checkpointing = getattr(transformer, "set_gradient_checkpointing", None)
+        if config.activation_checkpointing:
+            if not callable(set_checkpointing):
+                raise ValueError("model does not support activation checkpointing")
+            set_checkpointing(True)
+        self.forward_model: nn.Module = model
+        if config.compile_model:
+            compile_function = getattr(torch, "compile", None)
+            if not callable(compile_function):
+                raise RuntimeError("this PyTorch build does not provide torch.compile")
+            self.forward_model = cast(nn.Module, compile_function(model))
         self.optimizer = optimizer or build_adamw(
             model,
             learning_rate=config.learning_rate,
             weight_decay=config.weight_decay,
             betas=config.betas,
             epsilon=config.adam_epsilon,
+            fused=config.fused_optimizer,
         )
         scheduler_steps = config.max_steps or max(1, config.warmup_steps + 1)
         resolved_schedule: ScheduleName = (
@@ -238,6 +273,10 @@ class Trainer:
             "save_final_checkpoint",
             "final_checkpoint_name",
             "require_checkpoint_digest",
+            # Parent lineage is descriptive metadata for the continuation artifact.
+            # It does not change optimization or data semantics and may be set when
+            # extending an otherwise exact-resume run.
+            "parent_checkpoint",
         }
         saved_immutable = {
             key: value for key, value in saved_trainer.items() if key not in mutable_resume_fields
@@ -412,6 +451,8 @@ class Trainer:
         accumulated_total_loss = 0.0
         accumulated_language_loss = 0.0
         accumulated_auxiliary_loss = 0.0
+        accumulated_raw_tokens = 0
+        accumulated_valid_tokens = 0
 
         try:
             anomaly_context = (
@@ -429,6 +470,18 @@ class Trainer:
                         raise ValueError("batch contains no supervised target tokens")
                     accumulated_target_tokens += target_tokens
                     accumulated_examples += int(labels.shape[0])
+                    accumulated_raw_tokens += int(moved["input_ids"].numel())
+                    mask = moved.get("attention_mask")
+                    if mask is None:
+                        accumulated_valid_tokens += int(moved["input_ids"].numel())
+                    elif mask.ndim == 2:
+                        accumulated_valid_tokens += int(mask.to(torch.bool).sum().detach().cpu())
+                    elif mask.ndim == 3:
+                        accumulated_valid_tokens += int(
+                            mask.to(torch.bool).any(dim=-1).sum().detach().cpu()
+                        )
+                    else:
+                        raise ValueError("attention_mask must be rank 2 or 3")
 
                     with self._autocast():
                         output = self._model_forward(moved)
@@ -476,6 +529,15 @@ class Trainer:
         progress.consumed_examples += accumulated_examples
         elapsed_ms = (time.perf_counter_ns() - started) / 1_000_000
         divisor = self.config.gradient_accumulation_steps
+        parameter_norm_squared = 0.0
+        for parameter in self.model.parameters():
+            parameter_norm_squared += float(parameter.detach().float().norm().cpu()) ** 2
+        max_allocated = 0
+        max_reserved = 0
+        if self.device.type == "cuda":
+            max_allocated = int(torch.cuda.max_memory_allocated(self.device))
+            max_reserved = int(torch.cuda.max_memory_reserved(self.device))
+        elapsed_seconds = elapsed_ms / 1000
         return TrainingMetrics(
             step=progress.global_step,
             loss=accumulated_total_loss / divisor,
@@ -489,8 +551,17 @@ class Trainer:
             consumed_examples=progress.consumed_examples,
             step_time_ms=elapsed_ms,
             target_tokens_per_second=(
-                accumulated_target_tokens / (elapsed_ms / 1000) if elapsed_ms > 0 else 0.0
+                accumulated_target_tokens / elapsed_seconds if elapsed_seconds > 0 else 0.0
             ),
+            raw_tokens=accumulated_raw_tokens,
+            raw_tokens_per_second=(
+                accumulated_raw_tokens / elapsed_seconds if elapsed_seconds > 0 else 0.0
+            ),
+            padding_fraction=(1.0 - accumulated_valid_tokens / max(1, accumulated_raw_tokens)),
+            parameter_norm=parameter_norm_squared**0.5,
+            scaler_scale=float(self.scaler.get_scale()),
+            max_allocated_bytes=max_allocated,
+            max_reserved_bytes=max_reserved,
         )
 
     def _move_batch(self, batch: Mapping[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -519,7 +590,7 @@ class Trainer:
             kwargs["mode"] = self.config.model_mode
             if self.config.recurrent_steps is not None:
                 kwargs["recurrent_steps"] = self.config.recurrent_steps
-        output = self.model(batch["input_ids"], **kwargs)
+        output = self.forward_model(batch["input_ids"], **kwargs)
         if not isinstance(output, ModelOutput):
             raise TypeError("model must return ModelOutput when return_dict=True")
         return output
@@ -560,6 +631,12 @@ class Trainer:
             config=self._resolved_checkpoint_config(),
             metadata={"trainer": "wai_r0.training.engine.Trainer"},
             data_state=self._source_state(batches),
+            lineage={
+                "training_stage": self.config.training_stage,
+                "parent_checkpoint": self.config.parent_checkpoint,
+                "dataset_manifest_hash": self.config.dataset_manifest_hash,
+                "tokenizer_manifest_hash": self.config.tokenizer_manifest_hash,
+            },
             overwrite=overwrite,
         )
 

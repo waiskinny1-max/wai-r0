@@ -1,47 +1,41 @@
-# Checkpoint Format v2
+# Checkpoint Format v3
 
-WAI-R0 v0.5 checkpoints are trusted local PyTorch files.
+WAI-R0 0.6 writes trusted-local PyTorch checkpoint format `3` and reads formats `1`, `2`, and `3` where compatible.
+
+## Core fields
 
 | Field | Meaning |
 |---|---|
-| `format_version` | Schema integer; v0.5 writes `2` and reads formats `1` and `2`. |
-| `wai_r0_version` | Package version that wrote the checkpoint. |
-| `model_signature` | Canonical hash of model state names, shapes, and dtypes. |
-| `model` | Model state dictionary. |
-| `optimizer` | Optimizer state or `null`. |
-| `scheduler` | Scheduler state or `null`. |
-| `scaler` | AMP scaler state or `null`. |
-| `progress` | Steps, microsteps, tokens, examples, epoch, cursor, elapsed time, and best metrics. |
-| `config` / `config_hash` | Resolved configuration and canonical integrity hash. |
-| `metadata` | Caller-supplied provenance. |
-| `data_state` | Exact state of a stateful batch source. |
-| `extra_state` | Additional caller-owned state. |
+| `format_version` | Checkpoint schema version. |
+| `wai_r0_version` | Package version that wrote the file. |
+| `model_signature` | Hash of model state names, shapes, and dtypes. |
+| `model` | Model parameters and buffers. |
+| `optimizer` / `scheduler` / `scaler` | Complete training state or `null`. |
+| `progress` | Steps, microsteps, examples, tokens, elapsed time, and best metrics. |
+| `config` / `config_hash` | Resolved run configuration and canonical hash. |
+| `data_state` | Exact state of the batch source/sampler. |
 | `rng` | Python, CPU Torch, and CUDA RNG states. |
+| `metadata` / `extra_state` | Validated caller-owned provenance. |
 
-## CSV stream state v3
+## v3 lineage
 
-The native stream stores source hash, split/tokenizer semantics, row/epoch counters, bounded shuffle-buffer contents, shuffle RNG, pending epoch boundary, and packing mode. Formats 1 and 2 are readable only when newer shuffle/packing semantics are not requested.
+Format 3 adds explicit lineage metadata:
 
-## Atomicity and durability
+- `parent_checkpoint`;
+- `training_stage`;
+- `tokenizer_hash`;
+- `dataset_hash`.
 
-The writer serializes into the destination directory, flushes and fsyncs the temporary file, atomically replaces the destination, fsyncs the directory where supported, then writes the SHA-256 sidecar through the same atomic process. Disabling digest generation removes a stale sidecar.
+These values identify the parent and the exact tokenizer/dataset artifacts. A resumed run rejects incompatible lineage instead of silently continuing on different data.
 
-## Resume validation
+## Durability
 
-Load validates:
+Checkpoint and SHA-256 sidecar are written through temporary files, flushed, fsynced where supported, and atomically replaced. Loading can require the digest. A checksum detects corruption or substitution but is not a signature and does not make pickle safe.
 
-- digest when required;
-- supported format;
-- model signature;
-- model state;
-- optimizer/scheduler/scaler presence when requested;
-- progress structure;
-- RNG type;
-- configuration hash;
-- mapping types for metadata/data/extra state.
+## Resume rules
 
-The trainer additionally compares model and resume-critical trainer configuration before continuing.
+Exact resume requires compatible model signature, resolved critical config, optimizer/scheduler/scaler presence, tokenizer hash, dataset hash, sampler state, and RNG. Output directories and larger terminal budgets may change only when the service explicitly treats the continuation as an extension phase.
 
 ## Security
 
-Do not load untrusted checkpoint files. Optimizer and RNG restoration requires Python object deserialization. A checksum is an integrity signal, not a sandbox or signature.
+Load only trusted local checkpoint files. Python/Torch deserialization can execute unsafe payloads. Publish checksums and provenance, but do not describe them as sandboxing.

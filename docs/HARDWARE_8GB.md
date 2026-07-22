@@ -4,12 +4,12 @@
 
 ## Preflight sequence
 
-1. Run `wai-r0 doctor` and record the device/runtime.
-2. Run `wai-r0 profile` at the intended sequence length and declare `--cpu-threads` for CPU baselines.
-3. Start with batch size 1 and no sequence packing.
-4. Enable mixed precision supported by the device.
-5. Increase gradient accumulation before increasing resident batch size.
-6. Enable packing only after correctness tests pass for the chosen objective.
+1. Run `wai-r0 release doctor` and `wai-r0 hardware inspect`.
+2. Run `wai-r0 hardware estimate` for a theoretical preflight.
+3. Run `wai-r0 hardware calibrate` on the target GPU and record the result.
+4. Start long training from the largest measured-safe profile below the configured memory fraction.
+5. Increase gradient accumulation before resident batch size.
+6. Enable packing only after objective and boundary tests pass.
 7. Keep checkpoint and validation intervals large enough to avoid dominating short runs.
 
 ## Memory levers

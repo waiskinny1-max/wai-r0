@@ -1,119 +1,107 @@
-WAI-R0 v0.5 — live-audited changed/new files overlay
+WAI-R0 v0.6.0 — Ground Truth changed/new files overlay
 
-Generated UTC: 2026-07-11T20:35:51.783208+00:00
-Payload files before manifests: 94
+Generated UTC: 2026-07-11T21:56:24.799827+00:00
+Baseline: applied v0.5 Evidence Engine payload / live GitHub commit b7586e3
+Payload files before manifests: 82
 
 Validation completed:
 - Ruff format check: passed
 - Ruff lint: passed
-- mypy: passed across 44 v0.5 source files
-- v0.5 pytest suite: 109 passed
-- branch-aware coverage: 81.54% (minimum 80%)
-- exact live model compatibility surface: 4 passed
-- MLA-lite profile manifest: completed, decision keep for further study
-- recurrent OOD manifest: completed, decision re_test
-- native shuffled/packed target-token training + exact resume smoke: passed
-- Python source compilation: passed
+- mypy: passed across 72 native source files
+- pytest: 135 passed
+- branch-aware native coverage: 80.90% (minimum 80%)
+- deterministic BPE -> compiled dataset -> training -> checkpoint-v3 resume -> inference: passed
+- bounded sweep execution and SQLite registry smoke: passed
+- release doctor: ready=true (git metadata unavailable in reconstructed checkout)
 - source distribution and wheel build: passed
-- isolated wheel import/version/CLI smoke: passed
+- isolated wheel import/module/entry-point smoke: passed
 
-Not executed in this CPU-only environment:
-- CUDA kernels and measured GPU peak memory
-- Windows/macOS GitHub Actions jobs
-- the complete original repository test suite (GitHub inspection worked; clone did not)
+Not executed locally:
+- CUDA/BF16/FP16 and measured 8 GB GPU behavior
+- Windows/macOS runners
+- actual GitHub Actions run on the pushed commit
+- direct full-repository clone (DNS blocked)
 
 Files:
 .github/workflows/ci.yml
+.github/workflows/cuda-smoke.yml
+.github/workflows/nightly.yml
+.github/workflows/release.yml
+.github/workflows/reproducibility.yml
 APPLY_PATCH.md
 CHANGELOG.md
-CONTRIBUTING.md
-MANIFEST.in
 README.md
-SECURITY.md
-configs/experiments/mla_memory.yaml
-configs/experiments/recurrent_ood.yaml
-configs/model/mini_8gb.yaml
-configs/model/mini_8gb_mla.yaml
-configs/model/nano_gqa.yaml
-configs/model/nano_mla.yaml
-configs/model/nano_moe.yaml
-configs/model/nano_recurrent.yaml
+configs/sweeps/recurrent_depth.yaml
 docs/ARCHITECTURE.md
+docs/BPE_TOKENIZER.md
 docs/CHECKPOINT_FORMAT.md
+docs/COMPILED_DATASETS.md
 docs/DATA_SCHEMA.md
 docs/EVALUATION_PROTOCOL.md
-docs/EXPERIMENT_MANIFEST.md
 docs/HARDWARE_8GB.md
-docs/MIGRATION_V04_TO_V05.md
+docs/HARDWARE_CALIBRATION.md
+docs/INFERENCE.md
+docs/MIGRATION_V05_TO_V06.md
 docs/QUALITY_GATES.md
 docs/REPRODUCIBILITY.md
+docs/RUN_REGISTRY.md
 docs/SCIENTIFIC_LIMITS.md
+docs/SWEEPS.md
 docs/TOKENIZATION.md
 docs/TRAINING_PROTOCOL.md
-docs/V0_5_IMPLEMENTATION.md
+docs/V0_6_IMPLEMENTATION.md
 docs/VALIDATION.md
 main.py
 pyproject.toml
+scripts/check_quality.py
 scripts/check_v05_quality.py
-src/wai_r0/__init__.py
-src/wai_r0/app/__init__.py
-src/wai_r0/app/services.py
-src/wai_r0/config.py
-src/wai_r0/core/__init__.py
-src/wai_r0/core/reproducibility.py
-src/wai_r0/core/runtime.py
+scripts/verify_release.py
+src/wai_r0/__main__.py
+src/wai_r0/app/cli.py
+src/wai_r0/app/v06_services.py
 src/wai_r0/data/__init__.py
 src/wai_r0/data/chat.py
-src/wai_r0/data/csv_reader.py
-src/wai_r0/data/dedupe.py
-src/wai_r0/data/manifest.py
-src/wai_r0/data/packing.py
-src/wai_r0/data/schema.py
-src/wai_r0/data/splits.py
-src/wai_r0/data/streaming.py
+src/wai_r0/data/compiled.py
 src/wai_r0/eval/__init__.py
-src/wai_r0/eval/algorithmic.py
-src/wai_r0/eval/gates.py
-src/wai_r0/eval/metrics.py
-src/wai_r0/experiments/__init__.py
-src/wai_r0/experiments/manifest.py
-src/wai_r0/experiments/runner.py
-src/wai_r0/experiments/statistics.py
+src/wai_r0/eval/context.py
+src/wai_r0/eval/generation.py
+src/wai_r0/eval/language.py
+src/wai_r0/experiments/sweep.py
+src/wai_r0/hardware/__init__.py
+src/wai_r0/hardware/autotune.py
+src/wai_r0/hardware/capabilities.py
+src/wai_r0/hardware/memory.py
+src/wai_r0/inference/__init__.py
+src/wai_r0/inference/generate.py
+src/wai_r0/inference/sampling.py
+src/wai_r0/inference/session.py
 src/wai_r0/model.py
-src/wai_r0/modeling/__init__.py
-src/wai_r0/modeling/attention.py
-src/wai_r0/modeling/common.py
-src/wai_r0/modeling/feedforward.py
-src/wai_r0/modeling/recurrence.py
 src/wai_r0/modeling/transformer.py
-src/wai_r0/modeling/types.py
-src/wai_r0/profiler.py
-src/wai_r0/py.typed
-src/wai_r0/reporting/__init__.py
-src/wai_r0/reporting/render.py
-src/wai_r0/reporting/schema.py
-src/wai_r0/training/__init__.py
+src/wai_r0/quality/__init__.py
+src/wai_r0/quality/release.py
+src/wai_r0/registry/__init__.py
+src/wai_r0/registry/database.py
+src/wai_r0/registry/reporting.py
+src/wai_r0/tokenization/__init__.py
+src/wai_r0/tokenization/base.py
+src/wai_r0/tokenization/bpe.py
+src/wai_r0/tokenization/byte.py
+src/wai_r0/tokenization/io.py
+src/wai_r0/tokenization/normalization.py
+src/wai_r0/tokenization/trainer.py
 src/wai_r0/training/checkpoint.py
 src/wai_r0/training/engine.py
-src/wai_r0/training/losses.py
 src/wai_r0/training/optimizer.py
-src/wai_r0/training/schedules.py
 src/wai_r0/v05_cli.py
 src/wai_r0/version.py
-tests/conftest.py
-tests/test_v05_algorithmic.py
-tests/test_v05_algorithmic_runner.py
 tests/test_v05_checkpoint.py
 tests/test_v05_cli.py
 tests/test_v05_cli_integration.py
-tests/test_v05_config_validation.py
-tests/test_v05_data.py
-tests/test_v05_experiment_runner.py
-tests/test_v05_language_service.py
-tests/test_v05_manifest_reporting.py
-tests/test_v05_model.py
-tests/test_v05_model_edge_cases.py
-tests/test_v05_modeling_common.py
-tests/test_v05_streaming_packing.py
-tests/test_v05_training_primitives.py
 tests/test_v05_training_profile_statistics.py
+tests/test_v06_compiled_data.py
+tests/test_v06_inference.py
+tests/test_v06_language_and_cli_surface.py
+tests/test_v06_registry_quality_hardware.py
+tests/test_v06_sweep.py
+tests/test_v06_tokenization.py
+tests/test_v06_training_context_cli.py

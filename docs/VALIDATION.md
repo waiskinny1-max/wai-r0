@@ -1,6 +1,6 @@
-# WAI-R0 v0.5 Validation Record
+# WAI-R0 v0.6 Validation Record
 
-This record describes checks executed in the build environment before the changed-files archive was produced. It is not evidence that unexecuted hardware or operating systems passed locally.
+This record describes checks executed against the final local v0.6 implementation before the changed-files archive was assembled. It does not claim that unexecuted hardware, operating systems, or GitHub workflows passed.
 
 ## Environment
 
@@ -12,77 +12,126 @@ This record describes checks executed in the build environment before the change
 - pytest 9.0.2
 - build 1.5.1
 - CUDA unavailable
-- host PyTorch defaults: 56 intra-op threads, 28 inter-op threads
+- host PyTorch defaults: 56 intra-op and 28 inter-op threads
 
-## Static quality
+CPU training, evaluation, and inference tests used scoped `cpu_threads: 1` where appropriate. The process default was restored after each operation.
 
-```bash
-python scripts/check_v05_quality.py
-```
+## Static quality, tests, and coverage
 
-Result: Ruff format, Ruff lint, and mypy passed across 44 v0.5 source files and the v0.5 test/quality files. Preserved compressed v0.4 compatibility modules are intentionally outside the v0.5 static-analysis denominator and remain inside the overlaid repository's runtime test suite.
-
-## Tests and coverage
+Final commands:
 
 ```bash
-pytest -q
+python scripts/check_quality.py
+pytest
 pytest --cov=wai_r0 --cov-report=term-missing
 ```
 
-Result: 109 v0.5 tests passed. Branch-aware coverage was 81.54% across 4,201 measured source statements, above the enforced 80% floor.
+Result before packaging:
 
-The exact live `tests/test_model.py` compatibility surface fetched from `main` was reconstructed separately against the patch; all four tests passed. A complete clone of the live repository was unavailable in this execution environment, so the full original test suite could not be executed here.
+- Ruff format passed;
+- Ruff lint passed;
+- mypy passed over 72 native source files;
+- 135 tests passed;
+- branch-aware native coverage was 80.90% over 6,403 statements and 2,032 branches, above the enforced 80% floor.
 
-## Executable experiment checks
+The count above includes v0.5 and v0.6 tests present in the exact applied payload. Preserved compressed v0.4 compatibility modules remain explicitly excluded from the native static-analysis/coverage denominator and are not a location for new v0.6 code.
 
-### MLA-lite versus GQA cache experiment
+## Executed end-to-end learning lineage
+
+A deterministic CPU lineage was executed using 480 canonical conversation rows across copy, sorting, addition, and classification families:
+
+1. train deterministic BPE;
+2. compile and verify format-2 memory-mapped shards;
+3. train a two-layer GQA model;
+4. save digest-protected checkpoint format 3;
+5. resume exactly from step 120 to step 140 while adding parent lineage;
+6. run full validation-split language evaluation;
+7. generate through the same chat template used in training.
+
+### Data and tokenizer
+
+- requested/actual tokenizer vocabulary: 384;
+- compiled rows: 384 train, 48 validation, 48 test;
+- rejected rows: 0;
+- exact cross-split duplicates: 0;
+- compiled dataset format: 2;
+- validation split: 117 supervised target tokens and 255 target UTF-8 bytes.
+
+The audit also reported 186 heuristic near-duplicate rows. This is expected from the deliberately templated synthetic corpus and is one reason these results are not presented as broad language generalization.
+
+### Model
+
+- vocabulary: 384;
+- width: 64;
+- layers: 2;
+- query heads: 4;
+- KV heads: 2;
+- feed-forward width: 160;
+- maximum sequence length: 96;
+- attention: GQA;
+- dtype/device: CPU float32;
+- training mode: deterministic, packed, one intra-op thread.
+
+### Learning result
+
+- initial training loss: 6.0059919357;
+- first scheduled validation loss: 3.1983609994;
+- validation loss at step 120: 1.0454283754;
+- exact resume completed at step 140;
+- resumed progress: 280 consumed packed examples and 2,722 supervised target tokens;
+- checkpoint lineage recorded the step-120 final checkpoint as the parent.
+
+Full validation-split evaluation after resume:
+
+- mean NLL: 0.9813453336;
+- perplexity: 2.6680432368;
+- bits per target token: 1.4157820462;
+- bits per supervised target UTF-8 byte: 0.6495941153.
+
+The bits-per-byte denominator is the supervised target text, not the entire prompt row. The report also retains total raw row bytes separately.
+
+### Generation evidence
+
+Observed deterministic examples after resume:
+
+- `Case 1: Repeat beta twice.` → `beta beta`;
+- `Sort these numbers: 8 2 5 1` → repetitive `222222222222`;
+- `Add 4 and 28` → `22`.
+
+The copy output is correct, while the sorting and arithmetic outputs are wrong. The honest interpretation is that the model learned narrow corpus patterns and generation mechanics; it did not demonstrate general sorting, arithmetic, or general reasoning.
+
+## Sweep and registry checks
+
+A six-trial recurrent-depth grid was planned with stable plan/trial hashes. One bounded trial was executed:
+
+- executed trials: 1;
+- failed trials: 0;
+- outcome: `re_test`;
+- the maximum-trial ceiling was enforced.
+
+The resumed language report and checkpoint were inserted into the SQLite run registry and retrieved through the compact run-list surface.
+
+## Packaging and release checks
+
+The following completed successfully:
 
 ```bash
-PYTHONPATH=src python -m wai_r0.v05_cli experiment run \
-  configs/experiments/mla_memory.yaml \
-  --output /tmp/mla-v05.json \
-  --render both
+python -m compileall -q src
+python scripts/verify_release.py --repository .
+python -m build
 ```
 
-Observed in this CPU environment:
+The release doctor returned `ready: true`; git-related checks were warnings/unknown because the local reconstruction had no `.git` directory. Source distribution and wheel `0.6.0` built successfully. The wheel was installed into an isolated target and passed import, `python -m wai_r0 version`, installed `wai-r0 version`, and installed help-surface checks.
 
-- three paired seeds completed;
-- cached/full-context correctness gate passed;
-- mean measured KV-cache reduction: 0.6821705426;
-- preregistered decision: `keep` for further controlled study;
-- this is a tiny CPU systems result, not a scale-transfer or GPU-latency claim.
+The final patch ZIP receives an internal SHA-256 manifest and is checked for caches, checkpoints, databases, generated reports, wheels, and build products.
 
-### Recurrent refinement versus fast-mode control
+## Not executed locally
 
-```bash
-PYTHONPATH=src python -m wai_r0.v05_cli experiment run \
-  configs/experiments/recurrent_ood.yaml \
-  --output /tmp/recurrent-v05.json \
-  --render both
-```
+- CUDA kernels and actual GPU allocator peaks;
+- BF16/FP16 GPU training and scaler behavior;
+- target 8 GB VRAM calibration;
+- Windows and macOS jobs;
+- real GitHub Actions runs on the pushed default-branch commit;
+- the full live repository through a direct clone, because DNS blocked cloning in this environment.
 
-Observed in this CPU environment:
-
-- three paired seeds completed;
-- correctness and parameter-matching gates passed;
-- mean held-out-length token-accuracy difference: 0.0096153846;
-- 95% paired difference interval crossed zero;
-- preregistered decision: `re_test` rather than `keep`;
-- the candidate added active compute and was parameter-matched, not FLOP-matched.
-
-The manifest uses `cpu_threads: 1`. With the host default of 56 threads, these tiny operations suffered severe threading overhead; the scoped setting reduced the full recurrent experiment to seconds while preserving/restoring the process default. This is why CPU thread policy is now explicit experiment state.
-
-## Native training/resume smoke
-
-A shuffled and packed CSV training run produced dataset/tokenizer manifests, events, JSON/Markdown/HTML reports, a format-2 checkpoint, and SHA-256 sidecar. Resume restored format-3 stream state, including shuffle RNG/buffer and pending epoch boundary, and continued the supervised target-token counter without resetting data order.
-
-## Package checks
-
-The source distribution and wheel were built, installed into an isolated target directory, imported, and reported version `0.5.0`. Packaging checks are rerun after the final source changes before archive creation.
-
-## Unexecuted locally
-
-- CUDA kernels, actual GPU peak allocation, BF16/FP16 GPU training, and 8 GB VRAM behavior;
-- Windows and macOS jobs defined in GitHub Actions;
-- the complete live v0.4.6 test suite, because the execution environment could inspect GitHub files but could not clone the repository;
-- distributed training or scale-transfer claims, which are outside v0.5 scope.
+The exact applied v0.5 payload was used as the local baseline and the live GitHub commit was inspected through the connector. Workflow definitions are included, but a workflow file is not evidence that GitHub executed it.

@@ -26,7 +26,7 @@ def _model() -> ReasonerCore:
 
 def test_trainer_runs_and_counts_target_tokens() -> None:
     model = _model()
-    config = TrainerConfig(max_steps=2, learning_rate=1e-3)
+    config = TrainerConfig(max_steps=2, learning_rate=1e-3, save_final_checkpoint=False)
     batches = [
         {
             "input_ids": torch.tensor([[1, 2, 3, 4]]),
@@ -104,7 +104,12 @@ def test_trainer_cpu_thread_policy_is_scoped_and_reported_in_config() -> None:
     model = _model()
     trainer = Trainer(
         model,
-        TrainerConfig(max_steps=1, learning_rate=1e-3, cpu_threads=requested),
+        TrainerConfig(
+            max_steps=1,
+            learning_rate=1e-3,
+            cpu_threads=requested,
+            save_final_checkpoint=False,
+        ),
     )
     batch = {
         "input_ids": torch.tensor([[1, 2, 3, 4]]),

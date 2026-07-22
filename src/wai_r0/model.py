@@ -1,4 +1,4 @@
-"""Compatibility facade for the modular v0.5 model implementation.
+"""Compatibility facade for the modular model implementation.
 
 Existing imports from ``wai_r0.model`` remain valid. New code may import from
 ``wai_r0.modeling`` when a narrower dependency is useful.

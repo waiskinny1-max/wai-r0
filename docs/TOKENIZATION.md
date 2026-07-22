@@ -1,33 +1,31 @@
-# WAI-R0 v0.5 Tokenization
+# Tokenization
 
-## Byte-chat control
+## Byte control
 
-The built-in tokenizer is a deterministic byte-level control. It reserves explicit tokens for padding, beginning/end, and chat boundaries, then maps UTF-8 bytes into a fixed vocabulary.
+The byte tokenizer is deterministic, has complete UTF-8 coverage, and remains the zero-dependency control. It is inefficient for language training because common substrings require many tokens.
 
-Advantages:
+## Deterministic byte-level BPE
 
-- no external tokenizer dependency;
-- stable behavior across datasets;
-- no unknown token;
-- manifest can be reproduced from code and special-token mapping.
+The v0.6 BPE tokenizer starts from byte symbols and learns ranked merges from a deterministic corpus traversal. It retains byte fallback, fixed role tokens, optional NFKC normalization, and stable serialization.
 
-Limitations:
+The artifact includes:
 
-- longer sequences than a trained subword tokenizer;
-- poorer compute efficiency;
-- byte fragmentation is not a claim about natural language representation quality.
+- tokenizer type and format version;
+- vocabulary and ranked merges;
+- normalization policy;
+- fixed special tokens;
+- requested/actual vocabulary size;
+- corpus hash and byte count;
+- artifact/manifest hash.
 
-## Target construction
+The optimized encoder is tested against a simple reference implementation of ranked BPE semantics.
 
-The encoded sequence contains role boundaries and content. By default:
+## Shared chat template
 
-- system and user spans are context only;
-- assistant role marker is context only;
-- assistant content and terminal token are supervised;
-- padding and truncated non-target spans use `-100`.
+Training and inference encode the same sequence of BOS, role markers, role content, assistant boundary, supervised assistant tokens, and EOS. System/user spans and role markers are context; assistant content and terminal EOS are targets. Truncation must preserve target supervision or reject the example.
 
-Truncation preserves assistant supervision when possible. Examples with no remaining target tokens are invalid for training.
+Any tokenizer, normalization, role-token, or template change changes artifact identity and invalidates exact checkpoint resume.
 
-## Manifest
+## Cross-tokenizer evaluation
 
-Tokenizer manifests include tokenizer type/version, vocabulary size, special tokens, encoding policy, and a canonical manifest hash. The hash is stored in stream state; an exact resume with a different tokenizer fails.
+Token loss and perplexity are tokenizer dependent. Comparisons across tokenizers should include bits per raw UTF-8 byte, throughput, sequence lengths, and model/data budgets.

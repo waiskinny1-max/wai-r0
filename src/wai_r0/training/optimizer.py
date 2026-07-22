@@ -45,14 +45,29 @@ def build_adamw(
     weight_decay: float,
     betas: tuple[float, float],
     epsilon: float,
+    fused: bool = False,
 ) -> Optimizer:
     if learning_rate <= 0 or epsilon <= 0:
         raise ValueError("learning_rate and epsilon must be positive")
     if not (0 <= betas[0] < 1 and 0 <= betas[1] < 1):
         raise ValueError("AdamW betas must be in [0, 1)")
-    return AdamW(
-        parameter_groups_for_weight_decay(model, weight_decay=weight_decay),
-        lr=learning_rate,
-        betas=betas,
-        eps=epsilon,
-    )
+    if fused:
+        first_parameter = next(model.parameters(), None)
+        if first_parameter is None or first_parameter.device.type != "cuda":
+            raise ValueError("fused AdamW requires model parameters on CUDA")
+    kwargs: dict[str, object] = {
+        "lr": learning_rate,
+        "betas": betas,
+        "eps": epsilon,
+    }
+    if fused:
+        kwargs["fused"] = True
+    try:
+        return AdamW(
+            parameter_groups_for_weight_decay(model, weight_decay=weight_decay),
+            **kwargs,
+        )
+    except TypeError as exc:
+        if fused:
+            raise RuntimeError("this PyTorch build does not support fused AdamW") from exc
+        raise

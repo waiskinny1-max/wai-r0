@@ -1,0 +1,6 @@
+id: recurrent-depth-screen
+base_manifest: ../experiments/recurrent_ood.yaml
+maximum_trials: 6
+grid:
+  execution.candidate_recurrent_steps: [2, 4, 6]
+  execution.train_steps: [20, 40]

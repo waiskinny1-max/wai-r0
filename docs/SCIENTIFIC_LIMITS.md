@@ -1,6 +1,6 @@
 # Scientific Limits
 
-WAI-R0 v0.5 is an experiment-control platform, not evidence that its candidate architectures are superior.
+WAI-R0 v0.6 is an experiment-control platform, not evidence that its candidate architectures are superior.
 
 ## What results can establish
 

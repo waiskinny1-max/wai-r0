@@ -1,44 +1,44 @@
-# WAI-R0 Conversation CSV Schema
+# WAI-R0 Data Contract
 
-## Canonical columns
+## Canonical conversation CSV
 
-| Column | Required | Semantics |
-|---|---:|---|
-| `id` | recommended | Stable example identifier; duplicate IDs are rejected. |
-| `split` | optional | `train`, `val`, or `test`; used only when declared-split mode is enabled. |
-| `task_family` | optional | Family used for stratified analysis and provenance. |
-| `difficulty` | optional | Dataset-authored difficulty label; never treated as ground truth capability. |
-| `system` | optional | System context. |
-| `user` | required for chat schema | User content. |
-| `assistant` | required for chat schema | Supervised assistant target. |
-| `answer_format` | optional | Expected answer representation. |
-| `eval_type` | optional | Intended evaluation mode. |
-| `metadata_json` | optional | JSON object encoded as a CSV field. |
+Recommended columns:
 
-A legacy single-text schema is accepted by the compatibility trainer, but the native v0.5 path is designed for explicit conversation rows.
+`id, split, task_family, difficulty, system, user, assistant, answer_format, eval_type, metadata_json`
 
-## Validation
+`user` and `assistant` are required for native chat training. `id` should be stable and unique. `metadata_json`, when present, must decode to an object.
 
-The audit checks:
+## Audit
 
-- readable UTF-8/CSV structure;
-- required fields;
-- valid metadata JSON;
-- maximum field sizes;
-- duplicate IDs;
-- exact normalized content duplicates;
-- split assignment;
-- cross-split duplicate content;
-- token/character-length summaries.
+The streaming audit checks UTF-8/CSV validity, field limits, metadata, duplicate IDs, exact normalized duplicate content, split assignment, cross-split duplication, and length distributions. Rejections and duplicate samples are recorded. Native compilation fails by default when any row is rejected.
 
-Rejected rows are counted and sampled. Native v0.5 training refuses an audit containing rejected rows.
+Hash splitting remains the safe default. Declared splits are accepted only with an explicit option. Exact normalized content crossing train/validation/test fails compilation unless the user applies a recorded override.
 
-## Split policy
+## Compiled dataset format 2
 
-Hash splitting is the default even when a `split` column exists. Enable declared splits only when they are independently trustworthy and contain usable validation/test rows. Split assignment includes the split seed and canonical row content.
+Compilation produces a directory containing:
 
-Related examples should be grouped before splitting when the dataset contains paraphrases or multiple turns derived from the same source. Exact deduplication cannot detect every semantic near-duplicate.
+```text
+manifest.json
+train.tokens.bin
+train.labels.bin
+train.index.bin
+val.tokens.bin
+val.labels.bin
+val.index.bin
+test.tokens.bin
+test.labels.bin
+test.index.bin
+```
 
-## Content hash
+Empty splits may omit shard files. The manifest records source and tokenizer hashes, chat-template identity, audit summary, split policy, shard checksums, sample/target-token totals, and raw UTF-8 byte totals. Verification rehashes shards and can rehash the original source when available.
 
-The dataset manifest records the source SHA-256 and the resolved split policy. Modifying the file invalidates exact stream resume and changes run identity.
+Tokens and labels are memory mapped. Index records provide direct sample offsets. Labels use the training ignore index for context and padding. Assistant content is the supervised target by default.
+
+## Exact iteration
+
+Compiled iteration stores split, seed, epoch, cursor, and permutation semantics. The affine permutation is deterministic and O(1) in memory. Packing combines examples only when block boundaries and first-target masking prevent leakage.
+
+## Limits
+
+Exact hashes do not detect semantic paraphrases. Release datasets should add near-duplicate clustering and license/provenance review before public weight training.

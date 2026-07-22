@@ -5,11 +5,12 @@ import json
 import yaml
 
 from wai_r0.v05_cli import main
+from wai_r0.version import __version__
 
 
 def test_version_command(capsys) -> None:
     assert main(["version"]) == 0
-    assert capsys.readouterr().out.strip() == "0.5.0"
+    assert capsys.readouterr().out.strip() == __version__
 
 
 def test_config_validate_command(tmp_path, capsys) -> None:
@@ -52,7 +53,9 @@ def test_legacy_command_routing_contract(monkeypatch) -> None:
     module.main = legacy_main  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "wai_r0.cli", module)
 
-    assert v05_cli._should_delegate([]) is True
+    assert v05_cli._should_delegate([]) is False
+    assert v05_cli._should_delegate(["--help"]) is False
+    assert v05_cli._should_delegate(["train", "--help"]) is False
     assert v05_cli._should_delegate(["suite"]) is True
     assert v05_cli._should_delegate(["train", "plan.md"]) is True
     assert v05_cli._should_delegate(["train", "csv"]) is False
